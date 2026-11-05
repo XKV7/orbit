@@ -172,6 +172,8 @@ export class VisualTimeline {
 
   private idx = 0;
   private active: ActiveAnim[] = [];
+  /** 판정 조건으로 불린, 아직 시작 전인 연출 (시각순) */
+  private pending: TimedAction[] = [];
   private lastT = -Infinity;
   private readonly baseTrack: number;
   private readonly baseBg: number;
@@ -225,7 +227,7 @@ export class VisualTimeline {
     }));
     // TrackAnim은 그 타일부터 뒤로 적용 (시간이 아니라 타일 기준 — 미리 계산)
     this.tileAnim = new Array(n).fill(null);
-    const anims = chart.level.actions.filter((a) => a.type === 'TrackAnim').sort((a, b) => a.floor - b.floor);
+    const anims = chart.level.actions.filter((a) => a.type === 'TrackAnim' && !a.cond).sort((a, b) => a.floor - b.floor);
     let cur: TileAnimCfg | null = null;
     let ai = 0;
     for (let i = 0; i < n; i++) {
@@ -312,6 +314,7 @@ export class VisualTimeline {
     this.moveSerial = 0;
     this.idx = 0;
     this.active = [];
+    this.pending = [];
     this.lastT = -Infinity;
     this.version++;
   }
@@ -319,8 +322,12 @@ export class VisualTimeline {
   update(t: number): void {
     if (t < this.lastT - 1e-9) this.reset();
     const evs = this.chart.visual;
-    while (this.idx < evs.length && evs[this.idx].time <= t) {
-      const ev = evs[this.idx++];
+    const pd = this.pending;
+    for (;;) {
+      const a = this.idx < evs.length && evs[this.idx].time <= t ? evs[this.idx] : null;
+      const b = pd.length && pd[0].time <= t ? pd[0] : null;
+      if (!a && !b) break;
+      const ev = a && (!b || a.time <= b.time) ? evs[this.idx++] : pd.shift()!;
       this.advance(ev.time);
       const anim = this.start(ev);
       if (anim) this.active.push(anim);
@@ -328,6 +335,16 @@ export class VisualTimeline {
     this.advance(t);
     this.updateShake(t);
     this.lastT = t;
+  }
+
+  /** 조건 연출 실행 (원작 SetConditionalEvents): 태그의 연출을 곡 시각 t0 기준으로 시작한다. */
+  trigger(tag: string, t0: number): void {
+    const list = this.chart.cond.get(tag);
+    if (!list) return;
+    for (const ev of list) this.pending.push({ action: ev.action, time: t0 + ev.time, duration: ev.duration });
+    this.pending.sort((a, b) => a.time - b.time);
+    // 너무 많이 쌓이면 (매 타일 부르는 조건) 오래된 것부터 버린다
+    if (this.pending.length > 5000) this.pending.splice(0, this.pending.length - 5000);
   }
 
   private updateShake(t: number): void {

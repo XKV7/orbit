@@ -2,7 +2,7 @@ import { compileChart } from '../core/chart';
 import { TILE_LEN } from '../core/math';
 import { defaultMeta, defaultSettings, FILTER_NAMES, MAX_BPM, MAX_EFFECT_BEATS, MAX_EXTRA_BEATS, MAX_MULTIPLIER, validateLevel } from '../core/level';
 import { EASE_NAMES } from '../core/ease';
-import type { Action, JudgeRuleAction, DecoBlend, DecoMask, Decoration, EaseName, LevelData, ParticleDef, RecolorTrackAction, TrackAppear, TrackDisappear, TrackStyle } from '../core/types';
+import type { Action, CondSlot, ConditionalAction, JudgeRuleAction, DecoBlend, DecoMask, Decoration, EaseName, LevelData, ParticleDef, RecolorTrackAction, TrackAppear, TrackDisappear, TrackStyle } from '../core/types';
 
 /**
  * 얼음과 불의 춤(.adofai) 레벨 → ORBIT 레벨 변환. 순수 함수.
@@ -176,18 +176,43 @@ function particleFrom(e: Record<string, unknown>): ParticleDef {
   return p;
 }
 
+/**
+ * 장식 그림 파일 이름. 확장자가 없는 이름('============= ACT 0' 같은 구분용 이름)은 그림이 아니다 — 원작도 아무것도 그리지 않는다.
+ */
+function imageName(v: unknown): string {
+  const n = str(v).split(/[\\/]/).pop()?.trim() ?? '';
+  return /\.[a-z0-9]{2,5}$/i.test(n) ? n : '';
+}
+
+/** 원작 SetConditionalEvents 칸 → ORBIT 판정 조건 */
+const COND_FIELDS: [string, CondSlot][] = [
+  ['perfectTag', 'perfect'],
+  ['hitTag', 'hit'],
+  ['earlyPerfectTag', 'earlyPerfect'],
+  ['latePerfectTag', 'latePerfect'],
+  ['veryEarlyTag', 'early'],
+  ['veryLateTag', 'late'],
+  ['tooEarlyTag', 'tooEarly'],
+  ['tooLateTag', 'miss'],
+  ['missTag', 'miss'],
+  ['lossTag', 'loss'],
+];
+/** 태그 칸 문자열 → 태그 목록 ('NONE'은 비어 있음) */
+const condTags = (v: unknown): string[] => str(v).split(/\s+/).filter((t) => t && t.toUpperCase() !== 'NONE');
+
 /** 원작 AddObject → 도형 장식 (행성 또는 타일). */
 function objectFrom(e: Record<string, unknown>, floor: number): Decoration | null {
   const kind = str(e.objectType);
   const planet = kind === 'Planet';
-  const d = decoFrom({ ...e, decorationImage: 'x' }, floor, false);
+  const d = decoFrom({ ...e, decorationImage: 'x.png' }, floor, false);
   if (!d) return null;
   delete d.image;
   d.shape = planet ? 'planet' : 'tile';
   const colKey = planet ? e.planetColor : e.trackColor;
   const c = adofaiColor(colKey) ?? (planet ? '#ff8a3d' : '#debb7b');
   d.color = c;
-  const a = planet ? adofaiAlpha(colKey) : num(e.trackOpacity, 100) / 100;
+  // 타일 오브젝트도 8자리 색의 알파를 쓴다 (알파 0으로 숨겨 둔 오브젝트가 트랙 색 사각형으로 보였다)
+  const a = adofaiAlpha(colKey) * (planet ? 1 : num(e.trackOpacity, 100) / 100);
   if (a < 1) d.opacity = Math.max(0, a * (d.opacity ?? 1));
   if (!planet) {
     const ang = num(e.trackAngle, 180);
@@ -315,7 +340,7 @@ function maskFrom(v: unknown): DecoMask | 'none' | undefined {
 }
 
 function decoFrom(e: Record<string, unknown>, floor: number, isText: boolean): Decoration | null {
-  const image = str(e.decorationImage).split(/[\\/]/).pop() ?? '';
+  const image = imageName(e.decorationImage);
   // 원작 서식 태그(<color="red"> 등)는 ORBIT 글자에서 그대로 보이므로 뗀다 (줄바꿈은 유지)
   const text = isText ? richToPlain(str(e.decText)) : '';
   if (!isText && !image) return null;
@@ -721,6 +746,20 @@ export function convertAdofai(text: string): AdofaiResult {
       if (!e || str(e.eventType) !== 'MoveDecorations' || !str(e.eventTag)) continue;
       if (str(e.tag).split(/\s+/).some((t) => killDeco.has(t))) for (const t of str(e.eventTag).split(/\s+/)) if (t) deadlyTags.add(t);
     }
+  // 원작 SetConditionalEvents: 같은 타일에 있고 조건 칸의 태그를 단 이벤트는 제자리에서 실행하지 않고
+  // 그 판정이 나올 때만 실행된다 (실패 화면 장식 등이 항상 보이던 문제)
+  const condTagsAt = new Map<number, Set<string>>();
+  for (const ev of list) {
+    const e = ev as Record<string, unknown>;
+    if (!e || str(e.eventType) !== 'SetConditionalEvents' || e.active === false) continue;
+    const f = Math.round(num(e.floor, -1));
+    for (const [k] of COND_FIELDS)
+      for (const t of condTags(e[k])) {
+        if (deadlyTags.has(t)) continue;
+        if (!condTagsAt.has(f)) condTagsAt.set(f, new Set());
+        condTagsAt.get(f)!.add(t);
+      }
+  }
   for (const ev of list) {
     if (typeof ev !== 'object' || ev === null) continue;
     const e = ev as Record<string, unknown>;
@@ -728,10 +767,13 @@ export function convertAdofai(text: string): AdofaiResult {
     const floor = Math.round(num(e.floor, type === 'AddDecoration' || type === 'AddText' ? 0 : -1));
     if (floor < 0 || floor > last) continue;
     if (e.active === false) continue;
+    const ct = condTagsAt.get(floor);
+    const condTag = ct && type !== 'SetConditionalEvents' ? condTags(e.eventTag).find((t) => ct.has(t)) : undefined;
     // 원작 angleOffset: 타일을 친 뒤 그 각도만큼 돈 다음 (180° = 1박). 음수면 그만큼 먼저 (Timeline 시작 플래시: -360° = 2박 전)
     const delay = num(e.angleOffset, 0) / 180;
     const vis = (a: Action) => {
       if (delay !== 0) a.delay = Math.max(-MAX_EFFECT_BEATS, Math.min(MAX_EFFECT_BEATS, delay));
+      if (condTag) a.cond = condTag;
       actions.push(a);
     };
     switch (type) {
@@ -759,8 +801,10 @@ export function convertAdofai(text: string): AdofaiResult {
       case 'Hold': {
         // 원작 Hold의 duration = 추가로 도는 바퀴 수 (1바퀴 = 2박)
         const laps = num(e.duration, 0);
-        if (laps > 0 && floor < last && !midSet.has(floor)) actions.push({ floor, type: 'Hold', beats: Math.min(MAX_EXTRA_BEATS, laps * 2) });
-        else bump(approx, 'Hold(추가 바퀴 0)');
+        if (floor >= last || midSet.has(floor)) bump(approx, 'Hold(미드스핀·마지막 타일)');
+        else if (laps > 0) actions.push({ floor, type: 'Hold', beats: Math.min(MAX_EXTRA_BEATS, laps * 2) });
+        // 추가 바퀴 0 = 다음 타일까지 누르고 있다가 도착할 때 뗀다
+        else actions.push({ floor, type: 'Hold', beats: 0, toNext: true });
         break;
       }
       case 'Checkpoint':
@@ -990,9 +1034,12 @@ export function convertAdofai(text: string): AdofaiResult {
         if (!tag) break;
         const key = e.planetColor !== undefined ? e.planetColor : e.trackColor;
         const c = adofaiColor(key);
-        if (!c) break;
-        const a: Action = { floor, type: 'MoveDecorations', tag, color: c, duration: dur(e.duration, 0) };
+        if (!c && e.trackOpacity === undefined) break;
+        const a: Action = { floor, type: 'MoveDecorations', tag, duration: dur(e.duration, 0) };
+        if (c) a.color = c;
         if (e.planetColor !== undefined) a.opacity = adofaiAlpha(e.planetColor);
+        else if (/^#?[0-9a-fA-F]{8}$/.test(str(e.trackColor).trim()) || e.trackOpacity !== undefined)
+          a.opacity = adofaiAlpha(e.trackColor) * (e.trackOpacity !== undefined ? num(e.trackOpacity, 100) / 100 : 1);
         const ease = mapEase(e.ease);
         if (ease) a.ease = ease;
         vis(a);
@@ -1045,10 +1092,14 @@ export function convertAdofai(text: string): AdofaiResult {
         vis({ floor, type: 'Sound', play: str(e.hitsound) || 'Kick', volume: Math.max(0, Math.min(10, num(e.hitsoundVolume, 100) / 100)) });
         break;
       case 'SetConditionalEvents': {
-        if (!deadlyTags.size) {
-          bump(skipped, type);
-          break;
+        // 판정별 연출 (죽는 히트박스용 태그는 아래 판정 규칙으로)
+        const on: ConditionalAction['on'] = {};
+        for (const [k, slot] of COND_FIELDS) {
+          const t = condTags(e[k]).find((x) => !deadlyTags.has(x));
+          if (t && !on[slot]) on[slot] = t;
         }
+        actions.push({ floor, type: 'Conditional', on });
+        if (!deadlyTags.size) break;
         const map: [string, JudgeRuleAction['fail'][number]][] = [
           ['tooEarlyTag', 'tooEarly'],
           ['veryEarlyTag', 'early'],
@@ -1097,7 +1148,7 @@ export function convertAdofai(text: string): AdofaiResult {
         }
         if (e.opacity !== undefined && e.opacity !== null) a.opacity = Math.max(0, Math.min(1, num(e.opacity, 100) / 100));
         if (e.visible !== undefined) a.visible = onOff(e.visible);
-        if (str(e.decorationImage)) a.image = str(e.decorationImage).split(/[\\/]/).pop();
+        if (imageName(e.decorationImage)) a.image = imageName(e.decorationImage);
         const mk = maskFrom(e.maskingType);
         if (mk) a.mask = mk;
         if (e.depth !== undefined && e.depth !== null && Number.isFinite(Number(e.depth))) a.depth = Number(e.depth);
@@ -1112,10 +1163,24 @@ export function convertAdofai(text: string): AdofaiResult {
         else bump(approx, type);
         break;
       }
+      case 'AutoPlayTiles':
+        actions.push({ floor, type: 'AutoPlay', enabled: e.enabled === undefined ? true : onOff(e.enabled) });
+        break;
+      case 'SetPlanetRotation': {
+        const ease = mapEase(e.ease) ?? 'linear';
+        const parts = Math.max(1, Math.min(64, Math.round(num(e.easeParts, 1))));
+        const a: Action = { floor, type: 'PlanetEase', ease };
+        if (parts > 1) a.parts = parts;
+        if (str(e.easePartBehavior) === 'Mirror') a.mirror = true;
+        actions.push(a);
+        break;
+      }
+      // ORBIT은 홀드 소리가 따로 없다 (타격음은 그대로)
+      case 'SetHoldSound':
+        break;
       case 'FreeRoam':
       case 'FreeRoamTwirl':
       case 'FreeRoamRemove':
-      case 'SetPlanetRotation':
         bump(approx, type);
         break;
       default:

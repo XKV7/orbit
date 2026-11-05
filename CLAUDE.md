@@ -31,7 +31,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 172개 통과)
+npx vitest run         # 테스트 (현재 179개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -70,6 +70,10 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - AnimateTrack: 에디터는 꺼 둔 칸에도 `beatsAhead: 3`/`beatsBehind: 4` 기본값을 적어 둔다 → 해당 애니메이션(`trackAnimation`/`trackDisappearAnimation`)을 같이 바꿀 때만 박 수를 쓴다. 박은 그 타일 BPM 기준 (곡 시작 BPM 기준은 틀렸음, 되돌림).
 - MultiPlanet ThreePlanets: 매 타일 공전각 −60° (곧은 길 120°). 대회판 Phantigma 끝 시각이 일반판과 일치하는 것으로 검증.
 - SetConditionalEvents + Kill 히트박스 → 판정 규칙(JudgeRule, 대회 규칙).
+- SetConditionalEvents (일반): **같은 타일**에 있고 조건 칸 태그를 단 이벤트는 제자리에서 실행하지 않고 그 판정(완벽·약간·빠름/느림·너무 빠름·놓침·실패)이 나올 때만 실행 → `Conditional` 액션 + 연출의 `cond` 태그, `VisualTimeline.trigger`. ('NONE' = 빈 칸, 빈 조건 = 끄기)
+- Hold 추가 바퀴 0 = 다음 타일까지 누르고 있다가 도착할 때 떼기 (`Hold.toNext`, 떼기가 다음 타일 판정).
+- AutoPlayTiles → `AutoPlay` (그 구간 타일은 게임이 진행, 정확도에 안 넣음). SetPlanetRotation → `PlanetEase` (공전 곡선, 박 불변, easeParts·Mirror). SetHoldSound는 무시.
+- 확장자 없는 장식 그림 이름('============= ACT 0' 같은 구분용)은 그림 없음. AddObject 타일도 8자리 색 알파·trackOpacity 반영.
 - 트랙 스타일 NeonLight는 별도 모양(밝은 속 + 흰 테두리).
 - JSON에 쉼표가 빠진 .adofai도 읽는다 (선형 시간 관대한 파서).
 - zip 안에 .adofai가 여러 개면 묶인 그림을 가장 많이 쓰는 파일 → 이벤트 수 순으로 고른다 (에디터에서 바꿀 수 있음).
@@ -117,7 +121,8 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 
 - **타일 이동(MoveTrack) 중 공이 타일을 따라가는 시각적 오류** — 사용자가 보고. 공을 착지 위치에 고정하는 수정을 넣었다가 되돌림 (트랙 전체가 미끄러지는 연출은 원작도 공이 따라갈 수 있어 확신 없음). 어느 레벨·몇 초인지와 원작 녹화를 받아 비교한 뒤 고칠 것.
 - 배경(BGA): 레벨별로 남은 차이 — Phantigma 29초 근처 회색 장면, 152초 카메라 줌/위치, 145초 만화 집중선 과함, 전체 채도가 원작보다 낮음. Plum - Timeline은 구름 위치(카메라 구도), 타일 반투명도.
-- 미구현 원작 효과: 필터 LightWater, OilPaint(레거시 SetFilter), Vision 계열 일부, SetPlanetRotation, SetHitsound 게임 소리, MultiPlanet 4개 이상, FreeRoam.
+- 미구현 원작 효과: 필터 LightWater, OilPaint(레거시 SetFilter), Vision 계열 일부, SetHitsound 게임 소리, 홀드 소리, MultiPlanet 4개 이상, FreeRoam. 조건 연출로 부른 PlaySound는 소리 안 남.
+- AWC2026 13330타일 레벨(113.5 BPM)의 살구색 직사각형: 원작 녹화엔 없음. 조건 연출·오브젝트 알파 수정으로 사라졌는지 레벨 파일로 확인 필요 (원작은 회색 돌 장식이 떠다니는데 우리 녹화엔 없었음 — 함께 확인).
 - 판정이 바뀌었으니 사용자에게 다시 보정해 보도록 안내함 — 피드백 받기.
 - "너무 빠름" 하한: 지금은 구간 시간의 절반보다 이른 입력은 무시 (원작은 더 많이 너무 빠름으로 셀 수 있음, 미확인).
 - 네트워크: 이 클라우드 환경에서 `adofai.fandom.com`, `cloud.adofai.gg`는 막혀 있었다 (환경 설정에서 허용 필요). GitHub은 됨.

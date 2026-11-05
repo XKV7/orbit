@@ -66,6 +66,8 @@ interface Hold {
   floor: number;
   start: number;
   release: number;
+  /** 원작 0바퀴 홀드: 떼기가 곧 다음 타일 판정 */
+  toNext: boolean;
 }
 
 const FAIL_LABEL = {
@@ -149,7 +151,7 @@ export class Game {
     const n = this.chart.tiles.length;
     this.hitKind = new Array(n).fill(null);
     this.hitVol = new Float32Array(n).fill(1);
-    const sets = this.chart.level.actions.filter((a) => a.type === 'Sound' && (a.hitsound !== undefined || a.hitVolume !== undefined)).sort((a, b) => a.floor - b.floor);
+    const sets = this.chart.level.actions.filter((a) => a.type === 'Sound' && !a.cond && (a.hitsound !== undefined || a.hitVolume !== undefined)).sort((a, b) => a.floor - b.floor);
     let kind: string | null = null;
     let vol = 1;
     let si = 0;
@@ -412,7 +414,7 @@ export class Game {
   private handleInput(ev: InputEvent): void {
     if (ev.kind === 'up') {
       this.held.delete(ev.id);
-      if (this.state === 'playing' && this.hold && this.held.size === 0 && !this.autoplay) {
+      if (this.state === 'playing' && this.hold && this.held.size === 0 && !this.autoAt(this.hold.floor)) {
         this.judgeRelease(this.judgeTime(ev.ts));
       }
       return;
@@ -424,6 +426,8 @@ export class Game {
     }
     if (this.state !== 'playing' || this.autoplay || this.hold) return;
     if (this.cur >= this.chart.finish) return;
+    // 자동 진행 구간 (원작 AutoPlayTiles): 누르기는 무시
+    if (this.chart.tiles[this.cur].auto) return;
     const ti = this.judgeTime(ev.ts);
     const tile = this.chart.tiles[this.cur];
     const target = this.chart.times[this.cur + 1];
@@ -443,6 +447,7 @@ export class Game {
       this.stats.ruleBreaks++;
     }
     if (j === 'tooEarly') {
+      this.fireCond(this.cur, j, ti);
       this.stats.recordTooEarly(this.cur + 1);
       this.showJudge(this.cur + 1, j);
       if (this.overload.push(ev.ts / 1000)) this.fail('overload');
@@ -457,7 +462,23 @@ export class Game {
     this.advance(j);
   }
 
+  /** 원작 SetConditionalEvents: 타일 from에서 나간 판정이 조건에 맞으면 그 태그의 연출을 시작 */
+  private fireCond(from: number, j: Judgment | 'loss', t0: number): void {
+    const c = this.chart.tiles[Math.max(0, Math.min(this.chart.finish, from))]?.conds;
+    if (!c) return;
+    const tags = new Set<string>();
+    if (j === 'loss') {
+      if (c.loss) tags.add(c.loss);
+    } else {
+      const slot = c[j];
+      if (slot) tags.add(slot);
+      if (advances(j) && c.hit) tags.add(c.hit);
+    }
+    for (const tag of tags) this.timeline.trigger(tag, t0);
+  }
+
   private advance(j: Judgment): void {
+    this.fireCond(this.cur, j, this.chart.times[this.cur + 1]);
     this.cur++;
     this.stats.recordHit(this.cur, j);
     this.showJudge(this.cur, j);
@@ -476,9 +497,10 @@ export class Game {
       this.clear();
       return;
     }
-    if (tile.holdBeats > 0) {
-      this.hold = { floor: this.cur, start: tile.time, release: tile.time + (tile.holdBeats * 60) / tile.bpm };
-      if (!this.autoplay && this.held.size === 0) this.judgeRelease(this.hold.start);
+    if (tile.holdBeats > 0 || tile.holdToNext) {
+      const toNext = tile.holdToNext;
+      this.hold = { floor: this.cur, start: tile.time, release: toNext ? ch.times[this.cur + 1] : tile.time + (tile.holdBeats * 60) / tile.bpm, toNext };
+      if (!this.autoAt(this.cur) && this.held.size === 0) this.judgeRelease(this.hold.start);
       return;
     }
     if (tile.midspin) {
@@ -504,8 +526,26 @@ export class Game {
       return;
     }
     this.hold = null;
+    if (h.toNext) {
+      // 떼기가 다음 타일 도착 판정
+      if (this.chart.tiles[h.floor].auto && !this.autoplay) this.advanceAuto();
+      else this.advance(j);
+      return;
+    }
     this.stats.recordRelease(h.floor, j);
     this.showJudge(h.floor, j);
+  }
+
+  /** 이 타일에서 나가는 입력을 게임이 대신 하는지 (자동 플레이 또는 원작 AutoPlayTiles 구간) */
+  private autoAt(floor: number): boolean {
+    return this.autoplay || (this.chart.tiles[floor]?.auto ?? false);
+  }
+
+  /** 자동 진행 구간의 타일 통과 — 판정·정확도에는 넣지 않는다 */
+  private advanceAuto(): void {
+    this.cur++;
+    if (!this.scheduledHits) this.hitSound(this.cur);
+    this.onArrive();
   }
 
   private showJudge(floor: number, j: Judgment): void {
@@ -521,6 +561,8 @@ export class Game {
       this.survive(reason);
       return;
     }
+    this.fireCond(this.cur, reason === 'miss' ? 'miss' : 'loss', this.eng.songTime(performance.now()));
+    if (reason === 'miss') this.fireCond(this.cur, 'loss', this.eng.songTime(performance.now()));
     this.state = 'failed';
     this.failAt = performance.now();
     this.stats.fails++;
@@ -539,6 +581,7 @@ export class Game {
   private survive(reason: FailReason): void {
     switch (reason) {
       case 'miss': {
+        this.fireCond(this.cur, 'miss', this.chart.times[this.cur + 1]);
         this.cur++;
         this.stats.recordHit(this.cur, 'miss');
         this.showJudge(this.cur, 'miss');
@@ -555,7 +598,13 @@ export class Game {
         const h = this.hold;
         this.stats.holdFails++;
         this.hold = null;
-        if (h) {
+        if (h?.toNext) {
+          // 떼기가 다음 타일 판정이므로 그 타일을 놓친 것으로 넘어간다
+          this.cur++;
+          this.stats.recordHit(this.cur, 'miss');
+          this.showJudge(this.cur, 'miss');
+          this.onArrive();
+        } else if (h) {
           this.stats.recordRelease(h.floor, 'miss');
           this.showJudge(h.floor, 'miss');
         }
@@ -648,16 +697,19 @@ export class Game {
 
     if (this.state === 'playing') {
       // 자동 플레이
-      if (this.autoplay) {
-        if (this.hold && tj >= this.hold.release) this.judgeRelease(this.hold.release);
-        while (this.state === 'playing' && !this.hold && this.cur < ch.finish && tj >= ch.times[this.cur + 1]) {
-          this.advance('perfect');
-          const h = this.hold as Hold | null;
-          if (h && tj >= h.release) this.judgeRelease(h.release);
-        }
+      // (원작 AutoPlayTiles 구간도 같은 방식, 단 판정에는 넣지 않는다)
+      for (let guard = 0; this.state === 'playing' && guard < 100000; guard++) {
+        const h = this.hold as Hold | null;
+        if (h) {
+          if (this.autoAt(h.floor) && tj >= h.release) this.judgeRelease(h.release);
+          else break;
+        } else if (this.cur < ch.finish && this.autoAt(this.cur) && tj >= ch.times[this.cur + 1]) {
+          if (this.autoplay) this.advance('perfect');
+          else this.advanceAuto();
+        } else break;
       }
       // 홀드 떼기 시간 초과
-      if (this.state === 'playing' && this.hold && !this.autoplay) {
+      if (this.state === 'playing' && this.hold && !this.autoAt(this.hold.floor)) {
         const w = this.windowsFor(this.hold.floor);
         if (tj > this.hold.release + ((w.grace ?? w.far) / 1000) * this.pitch) this.fail('holdLate');
       }
