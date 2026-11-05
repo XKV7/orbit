@@ -40,6 +40,8 @@ export const ACTION_LABEL: Record<ActionType, string> = {
   AutoPlay: '자동 진행 구간',
   PlanetEase: '행성 공전 곡선',
   Conditional: '판정 조건 연출',
+  TrackBase: '타일 기본 배치',
+  Hide: '아이콘·판정 글자 숨기기',
 };
 
 export const SCHEMA: Record<ActionType, Field[]> = {
@@ -157,6 +159,18 @@ export const SCHEMA: Record<ActionType, Field[]> = {
   AutoPlay: [{ k: 'enabled', label: '자동 진행', kind: 'bool' }],
   // 조건 목록은 원작 변환에서만 채운다
   Conditional: [],
+  Hide: [
+    { k: 'icons', label: '타일 아이콘 숨기기', kind: 'bool', optional: true },
+    { k: 'judgment', label: '판정 글자 숨기기', kind: 'bool', optional: true },
+  ],
+  TrackBase: [
+    { k: 'from', label: '시작 타일', kind: 'int' },
+    { k: 'to', label: '끝 타일', kind: 'int' },
+    { k: 'offset', label: '위치 이동', kind: 'vec', optional: true },
+    { k: 'rotation', label: '회전', kind: 'num', optional: true },
+    { k: 'scale', label: '크기', kind: 'num', optional: true, step: 0.1 },
+    { k: 'opacity', label: '불투명도', kind: 'num', optional: true, step: 0.1 },
+  ],
   PlanetEase: [
     { k: 'ease', label: '곡선', kind: 'ease' },
     { k: 'parts', label: '조각 수', kind: 'int', optional: true },
@@ -214,6 +228,10 @@ export function defaultAction(type: ActionType, floor: number, finish: number): 
       return { floor, type, enabled: true };
     case 'Conditional':
       return { floor, type, on: {} };
+    case 'Hide':
+      return { floor, type, icons: true };
+    case 'TrackBase':
+      return { floor, type, from: floor, to: floor, offset: [0, 0] };
     case 'PlanetEase':
       return { floor, type, ease: 'inOutSine' };
     default:

@@ -25,7 +25,7 @@ export function deleteTile(level: LevelData, sel: number): { level: LevelData; s
 
 function shiftAction(a: Action, pivot: number, d: 1 | -1): void {
   if (a.floor > pivot) a.floor += d;
-  if (a.type === 'RecolorTrack' || a.type === 'MoveTrack') {
+  if (a.type === 'RecolorTrack' || a.type === 'MoveTrack' || a.type === 'TrackBase') {
     if (a.from > pivot) a.from += d;
     if (d > 0 ? a.to > pivot : a.to >= pivot) a.to += d;
     if (a.to < a.from) a.to = a.from;
@@ -40,7 +40,7 @@ export function truncateAfter(level: LevelData, sel: number): LevelData {
   lv.actions = lv.actions
     .filter((a) => a.floor <= last && !(a.floor === last && (a.type === 'Hold' || a.type === 'Pause' || a.type === 'Midspin')))
     .filter((a) => !((a.type === 'RecolorTrack' || a.type === 'MoveTrack') && a.from > last));
-  for (const a of lv.actions) if ((a.type === 'RecolorTrack' || a.type === 'MoveTrack') && a.to > last) a.to = last;
+  for (const a of lv.actions) if ((a.type === 'RecolorTrack' || a.type === 'MoveTrack' || a.type === 'TrackBase') && a.to > last) a.to = last;
   return lv;
 }
 

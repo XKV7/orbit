@@ -152,6 +152,20 @@ export interface MoveTrackAction extends ActionBase {
   duration?: number;
   ease?: EaseName;
 }
+/**
+ * 타일 기본 배치 (원작 PositionTrack): from~to 타일의 원래 위치를 옮기고 기본 회전·크기·불투명도를 정한다.
+ * 연출 이벤트가 아니라 레벨을 짤 때 정해지는 값 — MoveTrack은 이 위치·값을 기준으로 움직인다.
+ */
+export interface TrackBaseAction extends ActionBase {
+  type: 'TrackBase';
+  from: number;
+  to: number;
+  /** 원래 위치에 더하는 이동량 (월드 단위) */
+  offset?: [number, number];
+  rotation?: number;
+  scale?: number;
+  opacity?: number;
+}
 export interface BackgroundAction extends ActionBase {
   type: 'Background';
   color?: string;
@@ -306,7 +320,15 @@ export type Action =
   | MultiPlanetAction
   | AutoPlayAction
   | PlanetEaseAction
-  | ConditionalAction;
+  | ConditionalAction
+  | TrackBaseAction
+  | HideAction;
+/** 이 타일부터 타일 아이콘·판정 글자 숨기기 (원작 Hide). */
+export interface HideAction extends ActionBase {
+  type: 'Hide';
+  icons?: boolean;
+  judgment?: boolean;
+}
 
 /** 판정 조건 이름 (원작 SetConditionalEvents의 칸) */
 export type CondSlot = 'perfect' | 'hit' | 'earlyPerfect' | 'latePerfect' | 'early' | 'late' | 'tooEarly' | 'miss' | 'loss';

@@ -31,14 +31,17 @@ export function sameAngle(a: number, b: number): boolean {
 }
 
 /** path → 타일 위치 (수학 좌표계, y 위쪽). 길이 = path.length + 1. */
-export function tilePositions(path: readonly number[], len = TILE_LEN): Vec2[] {
+export function tilePositions(path: readonly number[], len = TILE_LEN, midspins?: ReadonlySet<number>): Vec2[] {
   const out: Vec2[] = [{ x: 0, y: 0 }];
   let x = 0;
   let y = 0;
-  for (const a of path) {
-    const r = degToRad(a);
-    x += len * Math.cos(r);
-    y += len * Math.sin(r);
+  for (let i = 0; i < path.length; i++) {
+    // 원작처럼 미드스핀 타일에서는 앞으로 나아가지 않는다 (다음 타일이 같은 자리 — 공전 행성이 반대편으로 넘어간다)
+    if (!midspins?.has(i)) {
+      const r = degToRad(path[i]);
+      x += len * Math.cos(r);
+      y += len * Math.sin(r);
+    }
     out.push({ x, y });
   }
   return out;

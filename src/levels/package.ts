@@ -364,8 +364,11 @@ export async function loadPackageAudio(pkg: LevelPackage): Promise<AudioBuffer> 
       pkg.warnings.push('음원을 디코딩할 수 없어 합성 비트로 대체합니다.');
     }
   }
-  const sr = eng.ctx.sampleRate;
-  pkg.buffer = eng.bufferFromSamples(synthBeatTrack(compileChart(pkg.level), sr), sr);
+  // 긴 곡은 낮은 표본율로 (10분 곡을 44.1kHz로 만들면 배열·버퍼에 200MB 넘게 써 폰에서 탭이 튕겼다)
+  const chart = compileChart(pkg.level);
+  const secs = chart.lastTime;
+  const sr = secs > 300 ? 16000 : secs > 120 ? 22050 : eng.ctx.sampleRate;
+  pkg.buffer = eng.bufferFromSamples(synthBeatTrack(chart, sr), sr);
   pkg.synthesized = true;
   return pkg.buffer;
 }

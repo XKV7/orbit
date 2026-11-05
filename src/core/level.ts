@@ -58,6 +58,8 @@ export const ACTION_TYPES: ActionType[] = [
   'AutoPlay',
   'PlanetEase',
   'Conditional',
+  'TrackBase',
+  'Hide',
 ];
 
 /** 게임 진행에 영향을 주는 이벤트 (나머지는 연출). */
@@ -71,6 +73,8 @@ export const GAMEPLAY_ACTIONS: ReadonlySet<ActionType> = new Set([
   'MultiPlanet',
   'AutoPlay',
   'Conditional',
+  'TrackBase',
+  'Hide',
 ]);
 
 export function defaultMeta(): LevelMeta {
@@ -362,6 +366,15 @@ function validateActionParams(a: Record<string, unknown>, type: ActionType, tile
     case 'JudgeRule': {
       const ok = ['tooEarly', 'early', 'late', 'earlyPerfect', 'latePerfect'];
       return Array.isArray(a.fail) && a.fail.every((x) => ok.includes(x as string)) ? null : `fail은 ${ok.join(', ')} 중 고른 목록이어야 합니다.`;
+    }
+    case 'Hide':
+      return (a.icons === undefined || typeof a.icons === 'boolean') && (a.judgment === undefined || typeof a.judgment === 'boolean') ? null : 'icons·judgment는 true/false여야 합니다.';
+    case 'TrackBase': {
+      const ti = (v: unknown) => isNum(v) && Number.isInteger(v) && v >= 0 && v < tileCount;
+      if (!ti(a.from) || !ti(a.to) || (a.from as number) > (a.to as number)) return 'from·to는 타일 번호여야 합니다 (from ≤ to).';
+      if (a.offset !== undefined && !(Array.isArray(a.offset) && a.offset.length === 2 && a.offset.every(isNum))) return 'offset은 [x, y] 숫자여야 합니다.';
+      for (const k of ['rotation', 'scale', 'opacity'] as const) if (a[k] !== undefined && !isNum(a[k])) return `${k}는 숫자여야 합니다.`;
+      return null;
     }
     case 'Conditional': {
       if (typeof a.on !== 'object' || a.on === null || Array.isArray(a.on)) return 'on은 {판정: 태그} 객체여야 합니다.';

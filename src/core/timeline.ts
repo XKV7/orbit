@@ -269,7 +269,7 @@ export class VisualTimeline {
     this.shakes = [];
     this.shakeX = 0;
     this.shakeY = 0;
-    this.tileScale.fill(1);
+    for (let i = 0; i < this.chart.tiles.length; i++) this.tileScale[i] = this.chart.tiles[i].baseScale;
     this.tileStyle.fill(0);
     this.tileColor2.fill(-1);
     this.tileGlowDur.fill(0);
@@ -312,7 +312,7 @@ export class VisualTimeline {
     this.tileOffX.fill(0);
     this.tileOffY.fill(0);
     this.tileRot.fill(0);
-    this.tileAlpha.fill(1);
+    for (let i = 0; i < this.chart.tiles.length; i++) this.tileAlpha[i] = this.chart.tiles[i].baseAlpha;
     this.tileOpSet.fill(NaN);
     this.claimPos.fill(0);
     this.claimRot.fill(0);

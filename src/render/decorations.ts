@@ -163,6 +163,9 @@ export class DecorationView {
   private readonly nearest = new Set<string>();
   /** 배경처럼 크게 쓰는 그림 이름 · 지금 크게 올라가 있는 그림 */
 
+  /** 레벨 시작 카메라 줌 (월드 장식 lockScale 기준) */
+  private startZoom = 1;
+
   constructor(
     private readonly chart: Chart,
     private readonly tl: VisualTimeline,
@@ -170,6 +173,11 @@ export class DecorationView {
   ) {
     this.behind.sortableChildren = true;
     this.front.sortableChildren = true;
+    // 레벨 시작 카메라 줌 (시작 상태로 바로 적용되는 카메라 이벤트)
+    for (const v of chart.visual) {
+      if (v.time > -1e8) break;
+      if (v.action.type === 'Camera' && v.action.zoom !== undefined) this.startZoom = v.action.zoom;
+    }
     for (const d of tl.decos) {
       const o = this.makeObj(d);
       this.place(o, d.def.mask ?? null, d.def.depth ?? -1);
@@ -546,8 +554,11 @@ export class DecorationView {
       let sx = d.sx;
       let sy = d.sy;
       if (rel === 'camera' ? !def.lockScale : def.lockScale) {
-        sx *= zk;
-        sy *= zk;
+        // 월드 장식의 lockScale은 레벨 시작 줌 기준으로 크기를 지킨다
+        // (AWC2026 ofnr 돌 고리: 시작 줌 230%에서 원작은 보통 장식과 같은 크기 — 100% 기준이면 2.3배 커졌다)
+        const k = rel === 'camera' ? zk : this.startZoom * zk;
+        sx *= k;
+        sy *= k;
       }
       const rot = (def.rotation ?? 0) + d.rot;
       let x: number;
