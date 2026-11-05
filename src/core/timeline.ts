@@ -48,6 +48,9 @@ export interface DecoState {
   pary: number;
   pox: number;
   poy: number;
+  /** 회전 중심 이동 (월드 단위) */
+  pvx: number;
+  pvy: number;
   visible: boolean;
   image: string | null;
   /** 가리기 (없으면 null) */
@@ -215,6 +218,8 @@ export class VisualTimeline {
       pary: 0,
       pox: 0,
       poy: 0,
+      pvx: 0,
+      pvy: 0,
       visible: true,
       image: null,
       mask: null,
@@ -285,6 +290,8 @@ export class VisualTimeline {
       d.pary = d.def.parallax?.[1] ?? 0;
       d.pox = d.def.parallaxOffset?.[0] ?? 0;
       d.poy = d.def.parallaxOffset?.[1] ?? 0;
+      d.pvx = d.def.pivot?.[0] ?? 0;
+      d.pvy = d.def.pivot?.[1] ?? 0;
       d.visible = d.def.visible !== false;
       d.image = d.def.image ?? null;
       d.mask = d.def.mask ?? null;
@@ -678,7 +685,7 @@ export class VisualTimeline {
         const targets = this.decos.filter((d) => d.tags.some((t) => tags.includes(t)));
         if (!targets.length) return null;
         const col = a.color !== undefined ? parseColor(a.color, 0xffffff) : null;
-        const from = targets.map((d) => ({ ox: d.ox, oy: d.oy, rot: d.rot, sx: d.sx, sy: d.sy, color: d.color, opacity: d.opacity, calpha: d.calpha, parx: d.parx, pary: d.pary, pox: d.pox, poy: d.poy }));
+        const from = targets.map((d) => ({ ox: d.ox, oy: d.oy, rot: d.rot, sx: d.sx, sy: d.sy, color: d.color, opacity: d.opacity, calpha: d.calpha, parx: d.parx, pary: d.pary, pox: d.pox, poy: d.poy, pvx: d.pvx, pvy: d.pvy }));
         // null인 축은 지금 값 그대로
         const to = (v: number | null | undefined, cur: number, k: number) => (v === null || v === undefined ? cur : lerp(cur, v, k));
         for (const d of targets) {
@@ -720,6 +727,10 @@ export class VisualTimeline {
               if (a.parallaxOffset) {
                 d.pox = to(a.parallaxOffset[0], f.pox, k);
                 d.poy = to(a.parallaxOffset[1], f.poy, k);
+              }
+              if (a.pivot) {
+                d.pvx = to(a.pivot[0], f.pvx, k);
+                d.pvy = to(a.pivot[1], f.pvy, k);
               }
               if (a.alpha !== undefined) d.calpha = lerp(f.calpha, a.alpha, k);
               if (col !== null) d.color = p >= 1 ? col : lerpColor(f.color, col, p);

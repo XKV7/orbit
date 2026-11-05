@@ -103,4 +103,25 @@ describe('원작 이벤트: 홀드·자동 진행·공전 곡선·조건 연출'
     const r = level({ angleData: [0, 0, 0], decorations: [{ floor: 0, eventType: 'AddObject', objectType: 'Floor', trackColor: 'debb7b00', tag: 'o' }] });
     expect(r.level.decorations?.[0].opacity).toBe(0);
   });
+
+  it('AddObject: 타일 번호 없으면 0번, 트랙 스타일·미드스핀 모양, MoveDecorations pivotOffset', () => {
+    const r = level({
+      angleData: [0, 0, 0],
+      decorations: [
+        { eventType: 'AddObject', objectType: 'Floor', trackType: 'Midspin', trackStyle: 'Minimal', trackColor: 'ffffffff', trackOpacity: 50, tag: 'rock', pivotOffset: [9, 0] },
+        { floor: 1, eventType: 'AddObject', objectType: 'Floor', trackStyle: 'Neon', tag: 'n' },
+      ],
+      actions: [{ floor: 1, eventType: 'MoveDecorations', tag: 'rock', pivotOffset: [-2, null], duration: 1 }],
+    });
+    const [rock, neon] = r.level.decorations ?? [];
+    expect(rock).toMatchObject({ floor: 0, tileStyle: 'minimal', midspin: true, opacity: 0.5, pivot: [900, 0] });
+    expect(neon).toMatchObject({ floor: 1, tileStyle: 'neon' });
+    const mv = r.level.actions.find((a) => a.type === 'MoveDecorations');
+    expect(mv && 'pivot' in mv ? mv.pivot : null).toEqual([-200, null]);
+    const ch = compileChart(r.level);
+    const tl = new VisualTimeline(ch);
+    tl.update(ch.times[3] + 5);
+    expect(tl.decos[0].pvx).toBe(-200);
+    expect(tl.decos[0].pvy).toBe(0);
+  });
 });

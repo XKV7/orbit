@@ -204,12 +204,28 @@ export class DecorationView {
       return { node: g, image: null, masked: null };
     }
     if (def.shape === 'tile') {
-      const w = TILE_LEN;
-      const g = new Graphics()
-        .rect(-w / 2, -BLOCK_W / 2, w, BLOCK_W)
-        .fill({ color: 0xffffff })
-        .rect(-w / 2 + 5, -BLOCK_W / 2 + 5, w - 10, BLOCK_W - 10)
-        .fill({ color: 0xffffff, alpha: 0.35 });
+      // 원작 트랙 스타일: 흰색으로 그려 색은 tint로 (검은색은 tint해도 검다)
+      const h = BLOCK_W / 2;
+      const w = def.midspin ? BLOCK_W : TILE_LEN;
+      // 미드스핀: 짧은 몸통 + 뾰족한 끝
+      const outline = (g: Graphics, k: number) =>
+        def.midspin
+          ? g.poly([-w / 2 + k, -h + k, w / 4 - k * 0.5, -h + k, w / 2 - k, 0, w / 4 - k * 0.5, h - k, -w / 2 + k, h - k])
+          : g.rect(-w / 2 + k, -h + k, w - 2 * k, 2 * h - 2 * k);
+      const g = new Graphics();
+      const st = def.tileStyle;
+      if (st === 'neon') {
+        outline(g, 0).fill({ color: 0xffffff });
+        outline(g, 4).fill({ color: 0x000000 });
+      } else if (st === 'neonlight') {
+        outline(g, 0).fill({ color: 0xffffff });
+        outline(g, 4).fill({ color: 0xffffff, alpha: 0.8 });
+      } else if (st === 'minimal') {
+        outline(g, 0).fill({ color: 0xffffff });
+      } else {
+        outline(g, 0).fill({ color: 0xffffff });
+        outline(g, 5).fill({ color: 0xffffff, alpha: 0.35 });
+      }
       return { node: g, image: null, masked: null };
     }
     if (def.text !== undefined) return { node: this.makeText(d), image: null, masked: null };
@@ -489,7 +505,7 @@ export class DecorationView {
       // 가림막은 투명도와 상관없이 모양만 쓴다 (원작 SpriteMask)
       node.visible = d.visible && (isMask || d.opacity * d.calpha > 0.001) && (!o.ps || o.ps.live.length > 0);
       // 자동 시험용: 이름으로 장식 숨기기 (원작과 비교할 때 어느 장식이 덮는지 찾기)
-      if (hidden && d.image && hidden.has(d.image)) node.visible = false;
+      if (hidden && ((d.image && hidden.has(d.image)) || d.tags.some((t) => hidden.has(t)))) node.visible = false;
       const want = d.mask === 'inside' || d.mask === 'outside' ? d.mask : null;
       if (want !== o.masked) {
         o.masked = want;
@@ -581,9 +597,11 @@ export class DecorationView {
           const px = nat * DECO_PX * Math.max(Math.abs(sx), Math.abs(sy)) * this.pxPerWorld;
           need.set(d.image, Math.max(need.get(d.image) ?? 0, Math.min(nat, px)));
         }
-        if (def.pivot) node.anchor.set(0.5 - def.pivot[0] / (tw * DECO_PX), 0.5 + def.pivot[1] / (th * DECO_PX));
+        if (d.pvx || d.pvy || def.pivot) node.anchor.set(0.5 - d.pvx / (tw * DECO_PX), 0.5 + d.pvy / (th * DECO_PX));
       } else {
         node.scale.set(sx, sy);
+        // 도형·글자: 회전 중심 이동 (그림과 같이 크기를 곱한 만큼 옮겨진다)
+        if (node instanceof Graphics && (d.pvx || d.pvy || node.pivot.x || node.pivot.y)) node.pivot.set(-d.pvx, d.pvy);
       }
     }
     for (const [k, v] of need) this.needSide.set(k, v);
