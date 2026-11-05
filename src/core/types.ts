@@ -224,6 +224,8 @@ export interface MoveDecorationsAction extends ActionBase {
   parallax?: [number | null, number | null];
   /** 카메라 따라가기 기준점 이동 (월드 단위), null인 축은 그대로. */
   parallaxOffset?: [number | null, number | null];
+  /** 회전 중심 이동 (월드 단위, 원작 pivotOffset). null인 축은 그대로 */
+  pivot?: [number | null, number | null];
   /** 색의 불투명도 (원작 8자리 색의 마지막 두 자리, 0~1). */
   alpha?: number;
   color?: string;
@@ -368,6 +370,10 @@ export interface Decoration {
   fontSize?: number;
   /** 도형 장식 (원작 AddObject): 행성 또는 타일 모양. 크기는 scale 1 = 실제 행성·타일 크기. */
   shape?: 'planet' | 'tile';
+  /** 타일 도형의 모양 (원작 트랙 스타일): neon = 검은 속 + 색 테두리, neonlight = 밝은 속 + 흰 테두리, minimal = 단색 */
+  tileStyle?: 'neon' | 'neonlight' | 'minimal';
+  /** 타일 도형을 미드스핀(짧은 뾰족한 타일) 모양으로 */
+  midspin?: boolean;
   /** 입자 장식 (원작 AddParticle). image가 입자 그림. */
   particle?: ParticleDef;
 }

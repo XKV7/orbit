@@ -215,6 +215,11 @@ function objectFrom(e: Record<string, unknown>, floor: number): Decoration | nul
   const a = adofaiAlpha(colKey) * (planet ? 1 : num(e.trackOpacity, 100) / 100);
   if (a < 1) d.opacity = Math.max(0, a * (d.opacity ?? 1));
   if (!planet) {
+    const st = str(e.trackStyle);
+    if (st === 'Neon') d.tileStyle = 'neon';
+    else if (st === 'NeonLight') d.tileStyle = 'neonlight';
+    else if (st === 'Minimal' || st === 'Basic') d.tileStyle = 'minimal';
+    if (str(e.trackType) === 'Midspin') d.midspin = true;
     const ang = num(e.trackAngle, 180);
     if (ang !== 180) d.rotation = (d.rotation ?? 0) + (180 - ang) / 2;
   }
@@ -764,7 +769,8 @@ export function convertAdofai(text: string): AdofaiResult {
     if (typeof ev !== 'object' || ev === null) continue;
     const e = ev as Record<string, unknown>;
     const type = str(e.eventType);
-    const floor = Math.round(num(e.floor, type === 'AddDecoration' || type === 'AddText' ? 0 : -1));
+    // 장식류는 타일 번호가 없으면 0 (원작 '전역' 장식 — 빠뜨리면 회색 돌 고리 같은 오브젝트가 통째로 사라졌다)
+    const floor = Math.round(num(e.floor, type === 'AddDecoration' || type === 'AddText' || type === 'AddObject' || type === 'AddParticle' ? 0 : -1));
     if (floor < 0 || floor > last) continue;
     if (e.active === false) continue;
     const ct = condTagsAt.get(floor);
@@ -1141,6 +1147,8 @@ export function convertAdofai(text: string): AdofaiResult {
         if (par) a.parallax = par;
         const po = axes(e.parallaxOffset, TILE_LEN);
         if (po) a.parallaxOffset = po;
+        const pv = axes(e.pivotOffset, TILE_LEN);
+        if (pv) a.pivot = pv;
         const c = adofaiColor(e.color);
         if (c) {
           a.color = c;

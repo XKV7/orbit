@@ -287,6 +287,8 @@ function validateDecoration(d: unknown, tileCount: number): string | null {
   const str = (k: string) => (d[k] === undefined || typeof d[k] === 'string' ? null : `${k}는 문자열이어야 합니다.`);
   if (d.image === undefined && d.text === undefined && d.shape === undefined) return 'image, text, shape 중 하나가 필요합니다.';
   if (d.shape !== undefined && d.shape !== 'planet' && d.shape !== 'tile') return "shape는 'planet' 또는 'tile'이어야 합니다.";
+  if (d.tileStyle !== undefined && !['neon', 'neonlight', 'minimal'].includes(d.tileStyle as string)) return "tileStyle은 'neon', 'neonlight', 'minimal' 중 하나여야 합니다.";
+  if (d.midspin !== undefined && typeof d.midspin !== 'boolean') return 'midspin은 true/false여야 합니다.';
   if (d.particle !== undefined) {
     const pe = validateParticle(d.particle);
     if (pe) return `particle: ${pe}`;
@@ -450,6 +452,7 @@ function validateActionParams(a: Record<string, unknown>, type: ActionType, tile
         vecN('scale'),
         vecN('parallax'),
         vecN('parallaxOffset'),
+        vecN('pivot'),
         optNum('alpha', 0, 1),
         optNum('rotation'),
         optNum('opacity', 0, 1),
