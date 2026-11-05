@@ -105,11 +105,44 @@ describe('.adofai 변환', () => {
         { floor: 3, eventType: 'PositionTrack', positionOffset: [5, 5], editorOnly: 'Enabled' },
       ],
     });
-    const mv = r.level.actions.filter((a) => a.type === 'MoveTrack');
-    expect(mv).toEqual([
-      { floor: 0, type: 'MoveTrack', from: 2, to: 3, offset: [0, TILE_LEN], duration: 0 },
-      { floor: 0, type: 'MoveTrack', from: 4, to: 5, offset: [TILE_LEN, TILE_LEN], duration: 0 },
+    const tb = r.level.actions.filter((a) => a.type === 'TrackBase');
+    expect(tb).toEqual([
+      { floor: 0, type: 'TrackBase', from: 2, to: 3, offset: [0, TILE_LEN] },
+      { floor: 0, type: 'TrackBase', from: 4, to: 5, offset: [TILE_LEN, TILE_LEN] },
     ]);
+    // 타일 원래 위치가 옮겨진다 (MoveTrack은 이 위치 기준)
+    const ch = compileChart(r.level);
+    const plain = compileChart({ ...r.level, actions: r.level.actions.filter((a) => a.type !== 'TrackBase') });
+    expect(ch.tiles[4].x - plain.tiles[4].x).toBeCloseTo(TILE_LEN);
+    expect(ch.tiles[4].y - plain.tiles[4].y).toBeCloseTo(TILE_LEN);
+    expect(ch.tiles[1].x).toBeCloseTo(plain.tiles[1].x);
+  });
+
+  it('PositionTrack: 이 타일만 옵션, 불투명도·크기는 다음 변경까지', () => {
+    const r = level({
+      angleData: [0, 0, 0, 0, 0, 0],
+      actions: [
+        { floor: 2, eventType: 'PositionTrack', relativeTo: [0, 'ThisTile'], opacity: 0, scale: 0, justThisTile: false },
+        { floor: 2, eventType: 'PositionTrack', relativeTo: [0, 'ThisTile'], opacity: 100, scale: 100, justThisTile: true },
+        { floor: 3, eventType: 'PositionTrack', positionOffset: [0, 2], justThisTile: true },
+        { floor: 5, eventType: 'PositionTrack', opacity: 100, scale: 100, justThisTile: false },
+      ],
+    });
+    const ch = compileChart(r.level);
+    // 2번: '뒤로 0' + '이 타일만 1' → 2번만 보이고 3·4번은 숨김, 5번부터 다시
+    expect(ch.tiles.map((t) => t.baseAlpha)).toEqual([1, 1, 1, 0, 0, 1, 1]);
+    expect(ch.tiles.map((t) => t.baseScale)).toEqual([1, 1, 1, 0, 0, 1, 1]);
+    const plain = compileChart({ ...r.level, actions: r.level.actions.filter((a) => a.type !== 'TrackBase') });
+    expect(ch.tiles[3].y - plain.tiles[3].y).toBeCloseTo(2 * TILE_LEN);
+    expect(ch.tiles[4].y - plain.tiles[4].y).toBeCloseTo(0);
+    const r2 = level({ angleData: [0, 0, 0, 0], actions: [{ floor: 2, eventType: 'PositionTrack', opacity: 0, scale: 50, justThisTile: false }] });
+    const ch2 = compileChart(r2.level);
+    expect(ch2.tiles.map((t) => t.baseAlpha)).toEqual([1, 1, 0, 0, 0]);
+    const tl = new VisualTimeline(ch2);
+    tl.update(0);
+    expect(tl.tileAlpha[2]).toBe(0);
+    expect(tl.tileScale[3]).toBe(0.5);
+    expect(tl.tileAlpha[1]).toBe(1);
   });
 
   it('배경: 색과 이미지 파일', () => {

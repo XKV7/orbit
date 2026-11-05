@@ -32,33 +32,35 @@ export function synthBeatTrack(chart: Chart, sampleRate = 44100): Float32Array {
     return seed / 4294967296 - 0.5;
   };
 
-  const kick = (t: number, amp: number) => {
-    const s0 = Math.floor(t * sampleRate);
-    const n = Math.floor(0.28 * sampleRate);
+  // 킥·하이햇은 모양이 늘 같아 한 번만 만들어 두고 더한다 (1만 타일 맵에서 매번 sin·exp를 계산하면 수 초 걸렸다)
+  const kickWave = new Float32Array(Math.floor(0.28 * sampleRate));
+  {
     let phase = 0;
-    for (let i = 0; i < n; i++) {
-      const idx = s0 + i;
-      if (idx < 0 || idx >= len) continue;
+    for (let i = 0; i < kickWave.length; i++) {
       const tt = i / sampleRate;
       const f = 45 + 110 * Math.exp(-tt * 28);
       phase += (2 * Math.PI * f) / sampleRate;
       const env = Math.exp(-tt * 9) * Math.min(1, i / 40);
-      out[idx] += Math.sin(phase) * env * amp + (i < 60 ? rand() * 0.3 * amp * (1 - i / 60) : 0);
+      kickWave[i] = Math.sin(phase) * env + (i < 60 ? rand() * 0.3 * (1 - i / 60) : 0);
     }
-  };
-  const hat = (t: number, amp: number) => {
-    const s0 = Math.floor(t * sampleRate);
-    const n = Math.floor(0.05 * sampleRate);
+  }
+  const hatWave = new Float32Array(Math.floor(0.05 * sampleRate));
+  {
     let prev = 0;
-    for (let i = 0; i < n; i++) {
-      const idx = s0 + i;
-      if (idx < 0 || idx >= len) continue;
+    for (let i = 0; i < hatWave.length; i++) {
       const w = rand();
-      const hp = w - prev; // 간단한 고역 통과
+      hatWave[i] = (w - prev) * Math.exp((-i / sampleRate) * 90); // 간단한 고역 통과
       prev = w;
-      out[idx] += hp * Math.exp((-i / sampleRate) * 90) * amp;
     }
+  }
+  const add = (wave: Float32Array, t: number, amp: number) => {
+    const s0 = Math.floor(t * sampleRate);
+    const a = Math.max(0, -s0);
+    const b = Math.min(wave.length, len - s0);
+    for (let i = a; i < b; i++) out[s0 + i] += wave[i] * amp;
   };
+  const kick = (t: number, amp: number) => add(kickWave, t, amp);
+  const hat = (t: number, amp: number) => add(hatWave, t, amp);
   const bass = (t: number, dur: number, freq: number, amp: number) => {
     const s0 = Math.floor(t * sampleRate);
     const n = Math.floor(dur * sampleRate);
@@ -75,17 +77,24 @@ export function synthBeatTrack(chart: Chart, sampleRate = 44100): Float32Array {
   };
 
   const roots = [55, 55, 65.41, 49];
+  // 박 그리드는 시각순 — 그 시각의 타일을 앞에서부터 따라간다 (타일마다 처음부터 찾으면 1만 타일 맵에서 십수 초 걸렸다)
+  let ti = 0;
   for (const g of grid) {
     const isBeat = Math.abs(g.beat - Math.round(g.beat)) < 1e-6;
     hat(g.t, isBeat ? 0.12 : 0.2);
     if (isBeat) {
       const bar = Math.floor(g.beat / 4);
-      const spb = 60 / (tiles.find((x) => x.time <= g.t + 1e-9 && x.time + x.duration > g.t)?.bpm ?? last.bpm);
+      while (ti + 1 < tiles.length && tiles[ti + 1].time <= g.t + 1e-9) ti++;
+      const spb = 60 / (tiles[ti]?.bpm ?? last.bpm);
       bass(g.t, Math.min(0.45, spb * 0.9), roots[((bar % 4) + 4) % 4], 0.22);
     }
   }
+  let lastKick = -Infinity;
   for (let i = 0; i < tiles.length; i++) {
     if (i > 0 && tiles[i].time === tiles[i - 1].time) continue; // midspin 중복
+    // 아주 촘촘한 구간은 솎는다 (30ms 미만 간격은 들어도 구분이 안 된다)
+    if (i < tiles.length - 1 && tiles[i].time - lastKick < 0.03) continue;
+    lastKick = tiles[i].time;
     kick(tiles[i].time, i === tiles.length - 1 ? 1 : 0.8);
   }
 

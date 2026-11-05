@@ -56,6 +56,13 @@ export interface ChartTile {
   planets: 2 | 3;
   speed: 'up' | 'down' | null;
   text: string | null;
+  /** 타일 기본 회전·크기·불투명도 (원작 PositionTrack) */
+  /** 타일 아이콘·판정 글자 숨김 (원작 Hide) */
+  hideIcon: boolean;
+  hideJudge: boolean;
+  baseRot: number;
+  baseScale: number;
+  baseAlpha: number;
   /** 누적 박 (첫 타일 기준). */
   beatPos: number;
 }
@@ -84,7 +91,7 @@ export const VISUAL_TYPES = new Set(['Camera', 'Flash', 'RecolorTrack', 'MoveTra
 /** 레벨을 컴파일해 모든 타일의 위치·박·시각을 미리 계산한다. */
 export function compileChart(level: LevelData): Chart {
   const { path, settings } = level;
-  const pos = tilePositions(path, TILE_LEN);
+  const pos = tilePositions(path, TILE_LEN, new Set(level.actions.filter((a) => a.type === 'Midspin').map((a) => a.floor)));
   const n = path.length + 1;
   const byFloor: Action[][] = Array.from({ length: n }, () => []);
   for (const a of level.actions) if (a.floor >= 0 && a.floor < n) byFloor[a.floor].push(a);
@@ -99,6 +106,23 @@ export function compileChart(level: LevelData): Chart {
   let auto = false;
   let orbitEase: ChartTile['orbitEase'] = null;
   let conds: ChartTile['conds'] = null;
+  let hideIcon = false;
+  let hideJudge = false;
+
+  // 원작 PositionTrack: 타일 원래 위치 이동 + 기본 회전·크기·불투명도
+  const baseRot = new Float64Array(n);
+  const baseScale = new Float64Array(n).fill(1);
+  const baseAlpha = new Float64Array(n).fill(1);
+  for (const a of level.actions) {
+    if (a.type !== 'TrackBase') continue;
+    const to = Math.min(n - 1, a.to);
+    for (let f = Math.max(0, a.from); f <= to; f++) {
+      if (a.offset) pos[f] = { ...pos[f], x: pos[f].x + a.offset[0], y: pos[f].y + a.offset[1] };
+      if (a.rotation !== undefined) baseRot[f] = a.rotation;
+      if (a.scale !== undefined) baseScale[f] = a.scale;
+      if (a.opacity !== undefined) baseAlpha[f] = a.opacity;
+    }
+  }
 
   for (let i = 0; i < n; i++) {
     let twirl = false;
@@ -133,6 +157,10 @@ export function compileChart(level: LevelData): Chart {
           break;
         case 'AutoPlay':
           auto = a.enabled;
+          break;
+        case 'Hide':
+          if (a.icons !== undefined) hideIcon = a.icons;
+          if (a.judgment !== undefined) hideJudge = a.judgment;
           break;
         case 'Conditional':
           conds = Object.keys(a.on).length ? { ...a.on } : null;
@@ -193,6 +221,11 @@ export function compileChart(level: LevelData): Chart {
       speed: bpm > prevBpm + 1e-9 ? 'up' : bpm < prevBpm - 1e-9 ? 'down' : null,
       text,
       beatPos,
+      hideIcon,
+      hideJudge,
+      baseRot: baseRot[i],
+      baseScale: baseScale[i],
+      baseAlpha: baseAlpha[i],
     });
     times.push(time);
     time += duration;

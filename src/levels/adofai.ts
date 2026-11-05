@@ -685,7 +685,8 @@ export function convertAdofai(text: string): AdofaiResult {
   const approx = new Map<string, number>();
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
   /** PositionTrack: 해당 타일부터 뒤로 계속 밀리는 정적 위치 (타일 단위). */
-  const shift: { floor: number; x: number; y: number }[] = [];
+  // 원작 PositionTrack (타일 원래 배치) — 아래에서 타일마다 값을 구해 TrackBase로
+  const posTracks: { floor: number; just: boolean; x: number; y: number; rot?: number; scale?: number; alpha?: number }[] = [];
   /** 마지막 MoveCamera 기준 (원작은 비워 두면 이어 쓴다) */
   let camRel = 'Player';
 
@@ -893,9 +894,16 @@ export function convertAdofai(text: string): AdofaiResult {
       case 'PositionTrack': {
         if (onOff(e.editorOnly)) break;
         const p = Array.isArray(e.positionOffset) ? e.positionOffset : [0, 0];
-        const x = num(p[0], 0);
-        const y = num(p[1], 0);
-        if (x || y) shift.push({ floor, x, y });
+        const pt: (typeof posTracks)[number] = { floor, just: onOff(e.justThisTile), x: num(p[0], 0), y: num(p[1], 0) };
+        if (e.rotation !== undefined && e.rotation !== null) pt.rot = num(e.rotation, 0);
+        if (e.scale !== undefined && e.scale !== null) {
+          const v = Array.isArray(e.scale) ? Math.min(...e.scale.map((q) => num(q, 100))) : num(e.scale, 100);
+          pt.scale = Math.max(0, Math.min(100, v / 100));
+        }
+        if (e.opacity !== undefined && e.opacity !== null) pt.alpha = Math.max(0, Math.min(1, num(e.opacity, 100) / 100));
+        const rt = Array.isArray(e.relativeTo) ? e.relativeTo : null;
+        if (rt && (num(rt[0], 0) !== 0 || (str(rt[1]) && str(rt[1]) !== 'ThisTile')) && (pt.x || pt.y)) bump(approx, 'PositionTrack(다른 타일 기준)');
+        posTracks.push(pt);
         break;
       }
       case 'CustomBackground': {
@@ -1122,7 +1130,9 @@ export function convertAdofai(text: string): AdofaiResult {
       case 'EditorComment':
       case 'SetDefaultText':
       case 'ScaleMargin':
+        break;
       case 'Hide':
+        actions.push({ floor, type: 'Hide', icons: onOff(e.hideTileIcon), judgment: onOff(e.hideJudgment) });
         break;
       case 'MoveDecorations': {
         const tag = str(e.tag).trim();
@@ -1206,19 +1216,54 @@ export function convertAdofai(text: string): AdofaiResult {
   });
   if (startLook) settings.trackColor = startLook.color;
 
-  // PositionTrack → 타일마다 누적 위치를 구해, 같은 위치가 이어지는 구간마다 즉시 적용되는 MoveTrack (첫 타일에서)
-  if (shift.length) {
-    const ox = new Float64Array(last + 1);
-    const oy = new Float64Array(last + 1);
-    for (const sh of shift)
-      for (let f = sh.floor; f <= last; f++) {
-        ox[f] += sh.x;
-        oy[f] += sh.y;
-      }
+  // PositionTrack → 타일마다 원래 위치(누적 이동)·기본 회전·크기·불투명도를 구해, 같은 값이 이어지는 구간마다 TrackBase
+  // 이 타일만(justThisTile)이면 그 타일만, 아니면 그 타일부터 뒤로 — 위치는 누적, 회전·크기·불투명도는 다음 변경까지
+  // (AWC2026 ofnr: 48번 '불투명도 0' 뒤 49~62번은 원작에서 끝까지 안 보이고, 63번 '불투명도 100'부터 다시 보인다)
+  if (posTracks.length) {
+    const byF = new Map<number, typeof posTracks>();
+    for (const p of posTracks) {
+      if (!byF.has(p.floor)) byF.set(p.floor, []);
+      byF.get(p.floor)!.push(p);
+    }
+    let sx = 0;
+    let sy = 0;
+    let rot = 0;
+    let scale = 1;
+    let alpha = 1;
+    type Base = { x: number; y: number; rot: number; scale: number; alpha: number };
+    const base: Base[] = new Array(last + 1);
+    for (let f = 0; f <= last; f++) {
+      const evs = byF.get(f) ?? [];
+      for (const p of evs)
+        if (!p.just) {
+          sx += p.x;
+          sy += p.y;
+          if (p.rot !== undefined) rot = p.rot;
+          if (p.scale !== undefined) scale = p.scale;
+          if (p.alpha !== undefined) alpha = p.alpha;
+        }
+      const b: Base = { x: sx, y: sy, rot, scale, alpha };
+      for (const p of evs)
+        if (p.just) {
+          b.x += p.x;
+          b.y += p.y;
+          if (p.rot !== undefined) b.rot = p.rot;
+          if (p.scale !== undefined) b.scale = p.scale;
+          if (p.alpha !== undefined) b.alpha = p.alpha;
+        }
+      base[f] = b;
+    }
+    const same = (a: Base, b: Base) => a.x === b.x && a.y === b.y && a.rot === b.rot && a.scale === b.scale && a.alpha === b.alpha;
     let from = 0;
     for (let f = 1; f <= last + 1; f++) {
-      if (f <= last && ox[f] === ox[from] && oy[f] === oy[from]) continue;
-      if (ox[from] || oy[from]) actions.push({ floor: 0, type: 'MoveTrack', from, to: f - 1, offset: [ox[from] * TILE_LEN, oy[from] * TILE_LEN], duration: 0 });
+      if (f <= last && same(base[f], base[from])) continue;
+      const b = base[from];
+      const tb: Action = { floor: 0, type: 'TrackBase', from, to: f - 1 };
+      if (b.x || b.y) tb.offset = [b.x * TILE_LEN, b.y * TILE_LEN];
+      if (b.rot) tb.rotation = b.rot;
+      if (b.scale !== 1) tb.scale = b.scale;
+      if (b.alpha !== 1) tb.opacity = b.alpha;
+      if (tb.offset || tb.rotation !== undefined || tb.scale !== undefined || tb.opacity !== undefined) actions.push(tb);
       from = f;
     }
   }

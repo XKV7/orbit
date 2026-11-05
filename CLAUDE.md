@@ -31,7 +31,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 180개 통과)
+npx vitest run         # 테스트 (현재 181개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -74,6 +74,9 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - Hold 추가 바퀴 0 = 다음 타일까지 누르고 있다가 도착할 때 떼기 (`Hold.toNext`, 떼기가 다음 타일 판정).
 - AutoPlayTiles → `AutoPlay` (그 구간 타일은 게임이 진행, 정확도에 안 넣음). SetPlanetRotation → `PlanetEase` (공전 곡선, 박 불변, easeParts·Mirror). SetHoldSound는 무시.
 - AddObject: 타일 번호가 없으면 0번(빠뜨리면 통째로 사라짐). 트랙 스타일 Neon = 검은 속 + 색 테두리 (트랙 색으로 칠하면 큰 살구색 사각형이 됐다), Minimal/Basic = 단색, trackType Midspin = 짧은 뾰족한 모양. MoveDecorations `pivotOffset` → `pivot` (회전 중심 이동, 애니메이션).
+- **미드스핀(999) 위치**: 원작은 미드스핀 타일에서 앞으로 나아가지 않는다 (다음 타일 = 같은 자리, 공전 행성이 반대편으로 넘어감). 박·시각은 그대로. 예전엔 한 칸 되돌아가 '미드스핀 뱀'이 꽃처럼 한 점에 겹쳤다.
+- PositionTrack → `TrackBase` (타일 원래 위치·기본 회전·크기·불투명도, MoveTrack은 이 값 기준). 이 타일만(justThisTile)이면 그 타일만, 아니면 위치는 뒤로 누적·나머지는 다음 변경까지 (ofnr 48~62번이 원작에서 끝까지 안 보이는 것으로 확인).
+- Hide → 타일 아이콘·판정 글자 숨김. 월드 장식 lockScale은 **레벨 시작 줌** 기준 (ofnr 돌 고리 크기 원작과 일치).
 - 확장자 없는 장식 그림 이름('============= ACT 0' 같은 구분용)은 그림 없음. AddObject 타일도 8자리 색 알파·trackOpacity 반영.
 - 트랙 스타일 NeonLight는 별도 모양(밝은 속 + 흰 테두리).
 - JSON에 쉼표가 빠진 .adofai도 읽는다 (선형 시간 관대한 파서).
@@ -123,8 +126,9 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - **타일 이동(MoveTrack) 중 공이 타일을 따라가는 시각적 오류** — 사용자가 보고. 공을 착지 위치에 고정하는 수정을 넣었다가 되돌림 (트랙 전체가 미끄러지는 연출은 원작도 공이 따라갈 수 있어 확신 없음). 어느 레벨·몇 초인지와 원작 녹화를 받아 비교한 뒤 고칠 것.
 - 배경(BGA): 레벨별로 남은 차이 — Phantigma 29초 근처 회색 장면, 152초 카메라 줌/위치, 145초 만화 집중선 과함, 전체 채도가 원작보다 낮음. Plum - Timeline은 구름 위치(카메라 구도), 타일 반투명도.
 - 미구현 원작 효과: 필터 LightWater, OilPaint(레거시 SetFilter), Vision 계열 일부, SetHitsound 게임 소리, 홀드 소리, MultiPlanet 4개 이상, FreeRoam. 조건 연출로 부른 PlaySound는 소리 안 남.
-- AWC2026 'Once Forgotten, Nothing Remains'(ofnr, 13330타일, 오브젝트 399개): 살구색 사각형(네온 미드스핀 오브젝트)·회색 돌 고리(번호 없는 오브젝트)는 고침. 남은 차이 — 돌 고리가 원작보다 약 1.7배 큼(lockScale·pivot 배율 확인 필요), 타일이 원작보다 작게 보임, 0:12에 15~20박 뒤 타일(48~62번, 꽃 모양)이 미리 보임(원작은 안 보임: 트랙 위치나 등장 애니메이션 차이). 원작 녹화는 사용자가 보낸 화면 녹화(HUD에 '음악 시간' 표시).
+- AWC2026 'Once Forgotten, Nothing Remains'(ofnr, 13330타일, 오브젝트 399개): 살구색 사각형(네온 미드스핀 오브젝트)·회색 돌 고리(번호 없는 오브젝트)는 고침. 남은 차이 — 0:25 이후 원작은 앞 타일이 훨씬 많이 보임(우리 beatsAhead 4박이 너무 적게 보여 줌, 원작 기준 미확인), 행성 색(원작 녹화는 흰색, 플레이어 설정일 수 있음). 원작 녹화는 사용자가 보낸 화면 녹화(HUD에 '음악 시간' 표시).
 - `window.__orbitHide`는 장식 태그로도 숨길 수 있다.
 - 판정이 바뀌었으니 사용자에게 다시 보정해 보도록 안내함 — 피드백 받기.
 - "너무 빠름" 하한: 지금은 구간 시간의 절반보다 이른 입력은 무시 (원작은 더 많이 너무 빠름으로 셀 수 있음, 미확인).
+- 긴 곡 성능: 음원이 없을 때 만드는 합성 비트가 10분 곡(ofnr)에서 15초 걸리고 200MB 넘게 써 폰에서 튕겼다 → 킥·하이햇 파형 재사용, 타일 찾기 선형, 5분 넘으면 16kHz. 이제 1.4초. 10분짜리 실제 음원(wav) 디코딩도 폰 메모리를 많이 쓴다 (48kHz 스테레오 약 240MB) — 튕김이 계속되면 확인.
 - 네트워크: 이 클라우드 환경에서 `adofai.fandom.com`, `cloud.adofai.gg`는 막혀 있었다 (환경 설정에서 허용 필요). GitHub은 됨.

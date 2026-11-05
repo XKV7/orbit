@@ -552,7 +552,8 @@ export class Game {
     const now = performance.now();
     const p = this.track.pos(floor);
     if (advances(j) && !settings.reduceEffects) this.fx.ring(p.x, p.y, JUDGE_COLOR[j], now);
-    if (settings.showJudgeText) this.fx.text(JUDGE_LABEL[j], JUDGE_COLOR[j], p.x, p.y, now);
+    // 원작 Hide(판정 글자): 출발 타일 기준
+    if (settings.showJudgeText && !this.chart.tiles[Math.max(0, floor - 1)].hideJudge) this.fx.text(JUDGE_LABEL[j], JUDGE_COLOR[j], p.x, p.y, now);
   }
 
   private fail(reason: FailReason): void {

@@ -98,6 +98,12 @@ export class TrackView {
       if (this.editorMode && this.editorFloors.has(t.floor)) kinds.push('editorEvent');
       // Twirl 이후 구간: 회전 방향 화살표를 옅게
       if (kinds.length === 0 && twirled) kinds.push(t.dir === 'CW' ? 'dirCW' : 'dirCCW');
+      // 원작 Hide: 타일 아이콘 숨김 (에디터 표시는 남긴다)
+      if (t.hideIcon && !this.editorMode) {
+        const fin = kinds.includes('finish');
+        kinds.length = 0;
+        if (fin) kinds.push('finish');
+      }
     }
   }
 
@@ -210,7 +216,7 @@ export class TrackView {
       }
       this.setVisible(o, true, !!u.showBeats);
       o.root.position.set(x + (anim ? anim.dx : 0), y - (anim ? anim.dy : 0));
-      o.root.rotation = (tl ? -degToRad(tl.tileRot[i]) : 0) - (anim ? degToRad(anim.rot) : 0);
+      o.root.rotation = -degToRad((tl ? tl.tileRot[i] : 0) + this.chart.tiles[i].baseRot) - (anim ? degToRad(anim.rot) : 0);
       o.root.alpha = alpha;
       let base = tl ? tl.tileColor[i] : 0x3a3f55;
       // 물결 (원작 Glow): 두 색 사이를 오간다, 트랙을 따라 퍼지는 모양
