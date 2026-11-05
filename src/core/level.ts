@@ -1,7 +1,7 @@
 import { isColor } from './color';
 import { EASE_NAMES } from './ease';
 import { sameAngle } from './math';
-import { DECO_BLENDS, type Action, type ActionType, type Decoration, type LevelData, type LevelMeta, type LevelSettings } from './types';
+import { DECO_BLENDS, COND_SLOTS, type CondSlot, type Action, type EaseName, type ActionType, type Decoration, type LevelData, type LevelMeta, type LevelSettings } from './types';
 
 /** 극단적인 BPM 맵(원작의 'Hello (BPM)' 류)도 담을 수 있게 넉넉히. */
 export const MAX_BPM = 10_000_000;
@@ -55,6 +55,9 @@ export const ACTION_TYPES: ActionType[] = [
   'Sound',
   'JudgeRule',
   'MultiPlanet',
+  'AutoPlay',
+  'PlanetEase',
+  'Conditional',
 ];
 
 /** 게임 진행에 영향을 주는 이벤트 (나머지는 연출). */
@@ -66,6 +69,8 @@ export const GAMEPLAY_ACTIONS: ReadonlySet<ActionType> = new Set([
   'Pause',
   'Hold',
   'MultiPlanet',
+  'AutoPlay',
+  'Conditional',
 ]);
 
 export function defaultMeta(): LevelMeta {
@@ -217,7 +222,9 @@ export function validateLevel(raw: unknown): ValidateResult {
       const err =
         a.delay !== undefined && (!isNum(a.delay) || Math.abs(a.delay) > MAX_EFFECT_BEATS)
           ? 'delay는 숫자(박)여야 합니다.'
-          : validateActionParams(a, type, tileCount);
+          : a.cond !== undefined && (typeof a.cond !== 'string' || !a.cond)
+            ? 'cond는 태그 문자열이어야 합니다.'
+            : validateActionParams(a, type, tileCount);
       if (err) {
         errors.push(`${where} (${type}, floor ${a.floor}): ${err}`);
         return;
@@ -354,8 +361,25 @@ function validateActionParams(a: Record<string, unknown>, type: ActionType, tile
       const ok = ['tooEarly', 'early', 'late', 'earlyPerfect', 'latePerfect'];
       return Array.isArray(a.fail) && a.fail.every((x) => ok.includes(x as string)) ? null : `fail은 ${ok.join(', ')} 중 고른 목록이어야 합니다.`;
     }
-    case 'Pause':
+    case 'Conditional': {
+      if (typeof a.on !== 'object' || a.on === null || Array.isArray(a.on)) return 'on은 {판정: 태그} 객체여야 합니다.';
+      for (const [k, v] of Object.entries(a.on)) {
+        if (!COND_SLOTS.includes(k as CondSlot)) return `on의 '${k}'는 ${COND_SLOTS.join(', ')} 중 하나여야 합니다.`;
+        if (typeof v !== 'string' || !v) return `on.${k}는 태그 문자열이어야 합니다.`;
+      }
+      return null;
+    }
+    case 'AutoPlay':
+      return typeof a.enabled === 'boolean' ? null : 'enabled는 true/false여야 합니다.';
+    case 'PlanetEase':
+      if (!EASE_NAMES.includes(a.ease as EaseName)) return `ease는 ${EASE_NAMES.join(', ')} 중 하나여야 합니다.`;
+      if (a.parts !== undefined && (!isNum(a.parts) || !Number.isInteger(a.parts) || a.parts < 1 || a.parts > 64)) return 'parts는 1~64 정수여야 합니다.';
+      return a.mirror === undefined || typeof a.mirror === 'boolean' ? null : 'mirror는 true/false여야 합니다.';
     case 'Hold':
+      if (a.toNext === true && isNum(a.beats) && a.beats === 0) return null;
+      if (a.toNext !== undefined && typeof a.toNext !== 'boolean') return 'toNext는 true/false여야 합니다.';
+      return isNum(a.beats) && a.beats > 0 && a.beats <= MAX_EXTRA_BEATS ? null : `beats는 0보다 크고 ${MAX_EXTRA_BEATS} 이하인 숫자여야 합니다.`;
+    case 'Pause':
       return isNum(a.beats) && a.beats > 0 && a.beats <= MAX_EXTRA_BEATS ? null : `beats는 0보다 크고 ${MAX_EXTRA_BEATS} 이하인 숫자여야 합니다.`;
     case 'Camera':
       if (a.relativeTo !== undefined && !['player', 'tile', 'global', 'last'].includes(a.relativeTo as string))

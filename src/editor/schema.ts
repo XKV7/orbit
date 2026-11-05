@@ -37,6 +37,9 @@ export const ACTION_LABEL: Record<ActionType, string> = {
   Sound: '소리',
   JudgeRule: '판정 규칙 (실패 조건)',
   MultiPlanet: '행성 수 (2·3)',
+  AutoPlay: '자동 진행 구간',
+  PlanetEase: '행성 공전 곡선',
+  Conditional: '판정 조건 연출',
 };
 
 export const SCHEMA: Record<ActionType, Field[]> = {
@@ -48,7 +51,10 @@ export const SCHEMA: Record<ActionType, Field[]> = {
   Checkpoint: [],
   Midspin: [],
   Pause: [{ k: 'beats', label: '박', kind: 'num', step: 0.5 }],
-  Hold: [{ k: 'beats', label: '박', kind: 'num', step: 0.5 }],
+  Hold: [
+    { k: 'beats', label: '박', kind: 'num', step: 0.5 },
+    { k: 'toNext', label: '다음 타일까지 (0박 홀드)', kind: 'bool', optional: true },
+  ],
   Camera: [
     { k: 'relativeTo', label: '기준', kind: 'choice', optional: true, options: ['player', 'tile', 'global', 'last'] },
     { k: 'tile', label: '기준 타일', kind: 'int', optional: true },
@@ -148,6 +154,14 @@ export const SCHEMA: Record<ActionType, Field[]> = {
   // 실패할 판정 목록은 원작 변환에서만 채운다 (에디터에서는 지우기만)
   JudgeRule: [],
   MultiPlanet: [{ k: 'planets', label: '행성 수 (2 또는 3)', kind: 'int' }],
+  AutoPlay: [{ k: 'enabled', label: '자동 진행', kind: 'bool' }],
+  // 조건 목록은 원작 변환에서만 채운다
+  Conditional: [],
+  PlanetEase: [
+    { k: 'ease', label: '곡선', kind: 'ease' },
+    { k: 'parts', label: '조각 수', kind: 'int', optional: true },
+    { k: 'mirror', label: '번갈아 뒤집기', kind: 'bool', optional: true },
+  ],
   Sound: [
     { k: 'hitsound', label: '타격음', kind: 'choice', optional: true, options: ['Kick', 'Hat', 'Snare', 'Clap', 'Sizzle', 'Chuck', 'Hammer', 'Shaker', 'None'] },
     { k: 'hitVolume', label: '타격음 크기', kind: 'num', optional: true, step: 0.1 },
@@ -196,6 +210,12 @@ export function defaultAction(type: ActionType, floor: number, finish: number): 
       return { floor, type, fail: ['tooEarly', 'early', 'late'] };
     case 'MultiPlanet':
       return { floor, type, planets: 3 };
+    case 'AutoPlay':
+      return { floor, type, enabled: true };
+    case 'Conditional':
+      return { floor, type, on: {} };
+    case 'PlanetEase':
+      return { floor, type, ease: 'inOutSine' };
     default:
       return { floor, type } as Action;
   }

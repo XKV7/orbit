@@ -1,3 +1,4 @@
+import { ease } from './ease';
 import {
   angularSpeed,
   dirSign,
@@ -10,7 +11,7 @@ import {
   tilePositions,
   TILE_LEN,
 } from './math';
-import type { Action, Dir, LevelData } from './types';
+import type { Action, CondSlot, Dir, EaseName, LevelData } from './types';
 
 export interface ChartTile {
   floor: number;
@@ -29,6 +30,14 @@ export interface ChartTile {
   theta: number;
   pauseBeats: number;
   holdBeats: number;
+  /** 원작 0바퀴 홀드: 다음 타일까지 누르고 있다가 도착할 때 뗀다 */
+  holdToNext: boolean;
+  /** 이 타일에서 나가는 입력을 게임이 자동으로 (원작 AutoPlayTiles) */
+  auto: boolean;
+  /** 공전 곡선 (원작 SetPlanetRotation). null = 일정한 속도 */
+  orbitEase: { ease: EaseName; parts: number; mirror: boolean } | null;
+  /** 이 타일에서 나가는 판정에 걸린 조건 연출 (원작 SetConditionalEvents). null = 없음 */
+  conds: Partial<Record<CondSlot, string>> | null;
   /** 이 타일에서 다음 타일까지 전체 박 수 (θ/180 + pause + hold). */
   beats: number;
   /** 시각적으로 도는 전체 각도. */
@@ -64,6 +73,8 @@ export interface Chart {
   times: number[];
   /** 연출 이벤트 (시간순). */
   visual: TimedAction[];
+  /** 조건 연출: 태그 → 연출 (time은 부른 순간 기준 상대 시각) */
+  cond: Map<string, TimedAction[]>;
   finish: number;
   lastTime: number;
 }
@@ -85,6 +96,9 @@ export function compileChart(level: LevelData): Chart {
   let time = settings.offset;
   let beatPos = 0;
   let planets: 2 | 3 = 2;
+  let auto = false;
+  let orbitEase: ChartTile['orbitEase'] = null;
+  let conds: ChartTile['conds'] = null;
 
   for (let i = 0; i < n; i++) {
     let twirl = false;
@@ -92,6 +106,7 @@ export function compileChart(level: LevelData): Chart {
     let checkpoint = false;
     let pauseBeats = 0;
     let holdBeats = 0;
+    let holdToNext = false;
     let text: string | null = null;
     const prevBpm = bpm;
     for (const a of byFloor[i]) {
@@ -114,6 +129,16 @@ export function compileChart(level: LevelData): Chart {
           break;
         case 'Hold':
           holdBeats += a.beats;
+          if (a.toNext) holdToNext = true;
+          break;
+        case 'AutoPlay':
+          auto = a.enabled;
+          break;
+        case 'Conditional':
+          conds = Object.keys(a.on).length ? { ...a.on } : null;
+          break;
+        case 'PlanetEase':
+          orbitEase = a.ease === 'linear' && !(a.parts && a.parts > 1) ? null : { ease: a.ease, parts: Math.max(1, a.parts ?? 1), mirror: a.mirror === true };
           break;
         case 'Text':
           text = a.text;
@@ -131,6 +156,7 @@ export function compileChart(level: LevelData): Chart {
     if (isFinish) {
       pauseBeats = 0;
       holdBeats = 0;
+      holdToNext = false;
     }
     const beats = thetaToBeats(theta) + pauseBeats + holdBeats;
     const extra = pauseBeats + holdBeats;
@@ -150,6 +176,10 @@ export function compileChart(level: LevelData): Chart {
       theta,
       pauseBeats,
       holdBeats,
+      holdToNext: holdToNext && holdBeats === 0,
+      auto,
+      orbitEase,
+      conds,
       beats,
       sweep,
       bpm,
@@ -170,10 +200,17 @@ export function compileChart(level: LevelData): Chart {
   }
 
   const visual: TimedAction[] = [];
+  const cond = new Map<string, TimedAction[]>();
   for (const a of level.actions) {
     if (!VISUAL_TYPES.has(a.type) || a.floor >= n) continue;
     const t = tiles[a.floor];
     const beats = 'duration' in a && typeof a.duration === 'number' ? a.duration : 0;
+    if (a.cond) {
+      let list = cond.get(a.cond);
+      if (!list) cond.set(a.cond, (list = []));
+      list.push({ action: a, time: ((a.delay ?? 0) * 60) / t.bpm, duration: (beats * 60) / t.bpm });
+      continue;
+    }
     // delay: 타일을 친 뒤 몇 박 늦게 (그 타일의 BPM 기준 — 원작 angleOffset)
     // 첫 타일의 즉시 이벤트(길이 0, 지연 없음)는 레벨 시작 상태 — 카운트다운 전부터 적용
     const atStart = a.floor === 0 && !a.delay && !(beats > 0);
@@ -181,11 +218,24 @@ export function compileChart(level: LevelData): Chart {
   }
   visual.sort((a, b) => a.time - b.time);
 
-  return { level, tiles, times, visual, finish: n - 1, lastTime: times[n - 1] };
+  for (const list of cond.values()) list.sort((a, b) => a.time - b.time);
+  return { level, tiles, times, visual, cond, finish: n - 1, lastTime: times[n - 1] };
 }
 
 /** 타일 i가 축일 때 곡 시각 t에서 공전 행성의 각도 (도). */
 export function orbiterAngle(tile: ChartTile, t: number): number {
+  const oe = tile.orbitEase;
+  if (oe && tile.duration > 0) {
+    const p = (t - tile.time) / tile.duration;
+    if (p > 0 && p < 1) {
+      // 구간을 조각으로 나눠 조각마다 곡선 (Mirror면 홀수 조각은 거꾸로)
+      const x = p * oe.parts;
+      const k = Math.floor(x);
+      const f = x - k;
+      const e = oe.mirror && k % 2 === 1 ? 1 - ease(oe.ease, 1 - f) : ease(oe.ease, f);
+      return tile.start + dirSign(tile.dir) * tile.sweep * ((k + e) / oe.parts);
+    }
+  }
   return tile.start + dirSign(tile.dir) * tile.rate * (t - tile.time);
 }
 

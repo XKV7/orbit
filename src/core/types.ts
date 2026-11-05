@@ -40,6 +40,8 @@ interface ActionBase {
   floor: number;
   /** 연출 이벤트: 타일을 친 뒤 이만큼(박) 늦게 시작. */
   delay?: number;
+  /** 연출 이벤트: 제자리에서 실행하지 않고, 조건 이벤트(Conditional)가 이 태그를 부를 때만 실행 */
+  cond?: string;
 }
 
 /** 카메라 기준: 행성(기본) · 특정 타일 · 월드 원점 · 직전 기준 유지. */
@@ -70,7 +72,24 @@ export interface PauseAction extends ActionBase {
 }
 export interface HoldAction extends ActionBase {
   type: 'Hold';
+  /** 추가로 도는 박 수. toNext면 0일 수 있다. */
   beats: number;
+  /** 원작 Hold(추가 바퀴 0): 다음 타일에 도착할 때까지 누르고 있다가 그때 뗀다 (떼기가 다음 타일 판정) */
+  toNext?: boolean;
+}
+/** 이 타일부터 자동으로 진행 (원작 AutoPlayTiles). */
+export interface AutoPlayAction extends ActionBase {
+  type: 'AutoPlay';
+  enabled: boolean;
+}
+/** 행성 공전 속도 곡선 (원작 SetPlanetRotation). 박은 그대로, 타일 사이에서 도는 모양만 바뀐다. */
+export interface PlanetEaseAction extends ActionBase {
+  type: 'PlanetEase';
+  ease: EaseName;
+  /** 한 구간을 몇 조각으로 나눠 곡선을 반복할지 (1 = 한 번) */
+  parts?: number;
+  /** 조각마다 곡선을 뒤집어 번갈아 (원작 Mirror) */
+  mirror?: boolean;
 }
 export interface CameraAction extends ActionBase {
   type: 'Camera';
@@ -282,7 +301,19 @@ export type Action =
   | ScreenAction
   | SoundAction
   | JudgeRuleAction
-  | MultiPlanetAction;
+  | MultiPlanetAction
+  | AutoPlayAction
+  | PlanetEaseAction
+  | ConditionalAction;
+
+/** 판정 조건 이름 (원작 SetConditionalEvents의 칸) */
+export type CondSlot = 'perfect' | 'hit' | 'earlyPerfect' | 'latePerfect' | 'early' | 'late' | 'tooEarly' | 'miss' | 'loss';
+export const COND_SLOTS: CondSlot[] = ['perfect', 'hit', 'earlyPerfect', 'latePerfect', 'early', 'late', 'tooEarly', 'miss', 'loss'];
+/** 이 타일 뒤로, 이 판정이 나오면 그 태그(cond)의 연출을 실행 (원작 SetConditionalEvents). 빈 on = 조건 끄기. */
+export interface ConditionalAction extends ActionBase {
+  type: 'Conditional';
+  on: Partial<Record<CondSlot, string>>;
+}
 
 /** 이 타일부터 이 판정이 나오면 실패 (원작 대회용 SetConditionalEvents + 죽는 히트박스). 빈 목록 = 규칙 없음. */
 export interface JudgeRuleAction extends ActionBase {

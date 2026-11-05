@@ -161,7 +161,7 @@ export class TrackView {
       o.text = txt;
       this.textLayer.addChild(txt);
     }
-    if (t.holdBeats > 0 && t.angleOut !== null) {
+    if ((t.holdBeats > 0 || t.holdToNext) && t.angleOut !== null) {
       // 긴 캡슐형 홀드 타일
       const h = new Graphics();
       const f = sv(t.angleOut, TILE_LEN * 0.5);
