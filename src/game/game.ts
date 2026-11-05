@@ -1,5 +1,5 @@
 import { beatMs, beatPhaseAt, compileChart, orbiterAngle, resumeTime, type Chart } from '../core/chart';
-import { advances, DIFFICULTY_MULT, JUDGE_COLOR, JUDGE_LABEL, judgeError, judgeWindows, MIN_FAR_MS, OverloadTracker, type Judgment } from '../core/judge';
+import { adofaiWindows, advances, JUDGE_COLOR, JUDGE_LABEL, judgeError, OverloadTracker, type Judgment } from '../core/judge';
 import { dirSign, TILE_LEN } from '../core/math';
 import { analyzeOffsets, type OffsetHint } from '../core/offset';
 import { PlayStats } from '../core/stats';
@@ -185,9 +185,8 @@ export class Game {
 
   /** 곡 재생 배율 = 레벨 pitch × 플레이 속도 (게임 중에는 고정). */
   private readonly pitch: number;
-  private get mult(): number {
-    return DIFFICULTY_MULT[settings.difficulty];
-  }
+  /** 터치 기기면 원작 모바일 판정 (최소 시간이 더 넉넉) */
+  private readonly mobile = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
   async start(): Promise<void> {
     // 판정 규칙 → 타일별
@@ -398,13 +397,8 @@ export class Game {
   // ───────────────────────── 판정 ─────────────────────────
 
   private windowsFor(floor: number) {
-    const tiles = this.chart.tiles;
-    const cur = tiles[floor].duration;
-    const next = tiles[floor + 1]?.duration ?? 0;
-    // 앞뒤 음표 간격의 절반 (실제 ms)
-    const gap = Math.min(cur, next > 0 ? next : cur) / this.pitch;
-    // 빠른 연타 구간도 원작처럼 최소 약 65ms(보통)는 받아준다 — 난이도 배율에 비례
-    return judgeWindows(beatMs(tiles[floor], this.pitch), this.mult, gap * 500, (MIN_FAR_MS * this.mult) / DIFFICULTY_MULT.normal);
+    // 원작과 같은 각도 기준 창 (완벽 30° · 약간 45° · 빠름/느림 60°, 빠른 곡은 최소 시간 보장)
+    return adofaiWindows(beatMs(this.chart.tiles[floor], this.pitch), settings.difficulty, this.mobile, this.speed);
   }
 
   /** 입력의 판정용 곡 시각. */

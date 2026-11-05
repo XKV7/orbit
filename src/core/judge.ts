@@ -43,6 +43,25 @@ export function judgeWindows(beatMs: number, mult = 1, minCapMs = 0, minFarMs = 
 }
 
 /**
+ * 원작(ADOFAI)과 같은 판정 창 (ms). 각도 기준 — 완벽 ±30°, 약간 빠름·느림 ±45°, 빠름·느림 ±60° (반 박 = 180°) —
+ * 이고, 아주 빠른 곡에서도 최소 시간은 보장한다:
+ *   PC: 완벽 20ms · 약간 30ms · 빠름/느림 (느슨함 91 / 보통 65 / 엄격 40)ms, 모바일: 50 · 70 · 90ms.
+ * 플레이 속도를 늦추면 최소 시간도 그만큼 길어진다 (원작 속도 연습과 같음).
+ * beatMs: 이 타일 속도의 한 박 (실제 ms).
+ */
+export function adofaiWindows(beatMs: number, difficulty: JudgeDifficulty, mobile = false, speed = 1): Windows {
+  const deg = (d: number) => (d / 180) * beatMs;
+  const s = speed > 0 ? speed : 1;
+  const counted = mobile ? 90 : { lenient: 91, normal: 65, strict: 40 }[difficulty] / s;
+  const perfect = mobile ? 70 : 30 / s;
+  const pure = mobile ? 50 : 20 / s;
+  const far = Math.max(deg(60), Math.max(25, counted));
+  const near = Math.max(deg(45), Math.max(25, perfect));
+  const perf = Math.max(deg(30), Math.max(25, pure));
+  return { perfect: perf, near, far, grace: far };
+}
+
+/**
  * 입력 오차 e (ms, 음수 = 빠름) 판정.
  * tooEarlyLimitMs: 이보다 더 이른 입력은 무시 (null).
  */

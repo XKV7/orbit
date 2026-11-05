@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DIFFICULTY_MULT, judgeError, judgeWindows, OverloadTracker } from '../src/core/judge';
+import { adofaiWindows, DIFFICULTY_MULT, judgeError, judgeWindows, OverloadTracker } from '../src/core/judge';
 import { PlayStats } from '../src/core/stats';
 
 const w = judgeWindows(500); // 120bpm: 상한 125ms → 기본 창 그대로
@@ -130,5 +130,25 @@ describe('통계', () => {
     expect(judgeError(-60, w, 41.7)).toBe('earlyPerfect');
     expect(judgeError(60, w, 41.7)).toBe('latePerfect');
     expect(judgeError(70, w, 41.7)).toBe('miss');
+  });
+});
+
+describe('원작(ADOFAI) 판정 창', () => {
+  it('보통 BPM은 각도 기준: 120bpm 한 박 500ms → 완벽 ±83ms · 약간 ±125ms · 빠름/느림 ±167ms', () => {
+    const w = adofaiWindows(500, 'normal');
+    expect(w.perfect).toBeCloseTo(83.33, 1);
+    expect(w.near).toBeCloseTo(125, 1);
+    expect(w.far).toBeCloseTo(166.67, 1);
+    expect(judgeError(-100, w, Infinity)).toBe('earlyPerfect');
+    expect(judgeError(150, w, Infinity)).toBe('late');
+    expect(judgeError(170, w, Infinity)).toBe('miss');
+  });
+  it('아주 빠른 곡은 최소 시간 (PC 20 · 30 · 65ms, 엄격 40ms, 모바일 50 · 70 · 90ms)', () => {
+    const fast = adofaiWindows(50, 'normal'); // 1200bpm
+    expect([fast.perfect, fast.near, fast.far]).toEqual([25, 30, 65]);
+    expect(adofaiWindows(50, 'strict').far).toBe(40);
+    expect(adofaiWindows(50, 'lenient').far).toBe(91);
+    const m = adofaiWindows(50, 'normal', true);
+    expect([m.perfect, m.near, m.far]).toEqual([50, 70, 90]);
   });
 });
