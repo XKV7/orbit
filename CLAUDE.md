@@ -31,7 +31,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 181개 통과)
+npx vitest run         # 테스트 (현재 186개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -130,5 +130,8 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - `window.__orbitHide`는 장식 태그로도 숨길 수 있다.
 - 판정이 바뀌었으니 사용자에게 다시 보정해 보도록 안내함 — 피드백 받기.
 - "너무 빠름" 하한: 지금은 구간 시간의 절반보다 이른 입력은 무시 (원작은 더 많이 너무 빠름으로 셀 수 있음, 미확인).
-- 긴 곡 성능: 음원이 없을 때 만드는 합성 비트가 10분 곡(ofnr)에서 15초 걸리고 200MB 넘게 써 폰에서 튕겼다 → 킥·하이햇 파형 재사용, 타일 찾기 선형, 5분 넘으면 16kHz. 이제 1.4초. 10분짜리 실제 음원(wav) 디코딩도 폰 메모리를 많이 쓴다 (48kHz 스테레오 약 240MB) — 튕김이 계속되면 확인.
+- 긴 곡 성능·메모리 (ofnr 10분 반 곡, 태블릿에서 탭이 꺼짐):
+  - 음원 없을 때 합성 비트: 킥·하이햇 파형 재사용, 타일 찾기 선형, 5분 넘으면 16kHz → 불러오기 15초 → 1.4초.
+  - 음원 디코딩: `AudioEngine.decodeBytes(u8, 곡 길이)` — 디코딩 결과가 예산(폰 120MB / PC 400MB)을 넘으면 표본율을 낮춘다(최저 22.05kHz). WAV는 `src/audio/wav.ts`로 직접 읽어 복사 없이 바로 옮김 (브라우저 디코더는 원래 표본율로 다 푼 뒤 줄여 중간 메모리가 1GB를 넘었다). 그 밖의 형식은 OfflineAudioContext(낮은 표본율) 디코딩. 탭 메모리 최고치 1.7GB → 0.5GB (Playwright Pixel 7 흉내, 렌더러 RSS).
+  - 측정: 스크래치의 mem2.mjs 같은 스크립트로 /proc의 크롬 렌더러 RSS를 0.3초마다 재며 불러오기·플레이.
 - 네트워크: 이 클라우드 환경에서 `adofai.fandom.com`, `cloud.adofai.gg`는 막혀 있었다 (환경 설정에서 허용 필요). GitHub은 됨.
