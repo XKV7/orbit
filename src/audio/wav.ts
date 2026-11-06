@@ -73,10 +73,18 @@ export function wavToChannels(u8: Uint8Array, info: WavInfo, out: Float32Array[]
   };
   const n = out[0]?.length ?? 0;
   if (!n || !info.frames) return;
-  // 16비트 정수는 복사 없는 Int16Array로 빠르게 (짝수 위치일 때)
+  // 16비트 정수: 짝수 위치면 복사 없는 Int16Array, 아니면(zip 안 파일) 바이트를 직접 합쳐 읽는다 — DataView 호출은 수 초 걸렸다
   const abs = u8.byteOffset + info.dataOffset;
-  if (!info.float && info.bits === 16 && abs % 2 === 0) {
-    const pcm = new Int16Array(u8.buffer, abs, info.frames * info.channels);
+  if (!info.float && info.bits === 16) {
+    const aligned = abs % 2 === 0 ? new Int16Array(u8.buffer, abs, info.frames * info.channels) : null;
+    const base = info.dataOffset;
+    const pcmAt = aligned
+      ? (i: number) => aligned[i]
+      : (i: number) => {
+          const p = base + i * 2;
+          const v = u8[p] | (u8[p + 1] << 8);
+          return v & 0x8000 ? v - 0x10000 : v;
+        };
     const chs = info.channels;
     const step16 = info.frames / n;
     for (let c = 0; c < out.length; c++) {
@@ -87,8 +95,8 @@ export function wavToChannels(u8: Uint8Array, info: WavInfo, out: Float32Array[]
           const x = i * step16;
           const a = Math.floor(x);
           const f = x - a;
-          const s0 = pcm[Math.min(a, info.frames - 1) * chs + src];
-          const s1 = pcm[Math.min(a + 1, info.frames - 1) * chs + src];
+          const s0 = pcmAt(Math.min(a, info.frames - 1) * chs + src);
+          const s1 = pcmAt(Math.min(a + 1, info.frames - 1) * chs + src);
           dst[i] = (s0 + (s1 - s0) * f) / 32768;
         }
       } else {
@@ -96,7 +104,7 @@ export function wavToChannels(u8: Uint8Array, info: WavInfo, out: Float32Array[]
           const a = Math.floor(i * step16);
           const b = Math.min(info.frames, Math.max(a + 1, Math.floor((i + 1) * step16)));
           let sum = 0;
-          for (let k = a; k < b; k++) sum += pcm[k * chs + src];
+          for (let k = a; k < b; k++) sum += pcmAt(k * chs + src);
           dst[i] = sum / (b - a) / 32768;
         }
       }
