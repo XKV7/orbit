@@ -1,3 +1,4 @@
+import { parseWav, wavToChannels } from './wav';
 import { SmoothClock } from '../core/clock';
 
 /**
@@ -161,8 +162,35 @@ export class AudioEngine {
     return this.pitch;
   }
 
-  async decode(data: ArrayBuffer): Promise<AudioBuffer> {
-    return await this.ctx.decodeAudioData(data.slice(0));
+  /**
+   * 음원 디코딩. data는 호출 측이 넘긴 복사본 (decodeAudioData가 비운다 — 여기서 또 복사하지 않는다).
+   * seconds(대략 곡 길이)를 주면 긴 곡은 낮은 표본율로 풀어 메모리를 아낀다:
+   * 10분 곡을 48kHz 스테레오로 풀면 240MB가 넘어 태블릿에서 탭이 꺼졌다 (AWC2026 ofnr).
+   */
+  /**
+   * 바이트 그대로 디코딩 (복사는 필요할 때만). 긴 WAV는 직접 읽어 낮은 표본율 버퍼로 바로 옮긴다
+   * — 브라우저 디코더는 원래 표본율로 다 푼 뒤 줄여 중간 메모리가 1GB를 넘었다.
+   */
+  async decodeBytes(u8: Uint8Array, seconds?: number): Promise<AudioBuffer> {
+    const rate = decodeRate(this.ctx.sampleRate, seconds);
+    const info = rate < this.ctx.sampleRate ? parseWav(u8) : null;
+    if (info) {
+      const outRate = Math.min(rate, info.rate);
+      const frames = Math.max(1, Math.round((info.frames * outRate) / info.rate));
+      const ch = Math.min(2, info.channels);
+      const buf = this.ctx.createBuffer(ch, frames, outRate);
+      wavToChannels(u8, info, Array.from({ length: ch }, (_, c) => buf.getChannelData(c)));
+      return buf;
+    }
+    return this.decode(u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer, seconds);
+  }
+
+  async decode(data: ArrayBuffer, seconds?: number): Promise<AudioBuffer> {
+    const rate = decodeRate(this.ctx.sampleRate, seconds);
+    if (rate < this.ctx.sampleRate && typeof OfflineAudioContext === 'function') {
+      return await new OfflineAudioContext(2, 1, rate).decodeAudioData(data);
+    }
+    return await this.ctx.decodeAudioData(data);
   }
 
   bufferFromSamples(samples: Float32Array, sampleRate: number): AudioBuffer {
@@ -176,4 +204,13 @@ let engine: AudioEngine | null = null;
 export function audio(): AudioEngine {
   if (!engine) engine = new AudioEngine();
   return engine;
+}
+
+/** 디코딩한 음원이 쓸 메모리 상한 (스테레오 float) — 넘으면 표본율을 낮춘다 (최저 22.05kHz) */
+const DECODE_BUDGET = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 120 : 400) * 1024 * 1024;
+export function decodeRate(ctxRate: number, seconds?: number, budget = DECODE_BUDGET): number {
+  if (!seconds || seconds <= 0) return ctxRate;
+  const bytes = seconds * ctxRate * 2 * 4;
+  if (bytes <= budget) return ctxRate;
+  return Math.min(ctxRate, Math.max(22050, Math.floor(budget / (seconds * 2 * 4))));
 }

@@ -357,7 +357,9 @@ export async function loadPackageAudio(pkg: LevelPackage): Promise<AudioBuffer> 
   const data = findSong(pkg.files, pkg.level.settings.songFile);
   if (data) {
     try {
-      pkg.buffer = await eng.decode(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer);
+      // 곡 길이 (레벨 끝 + 여유) — 긴 곡은 낮은 표본율로 풀어 메모리를 아낀다
+      const secs = compileChart(pkg.level).lastTime + 10;
+      pkg.buffer = await eng.decodeBytes(data, secs);
       pkg.synthesized = false;
       return pkg.buffer;
     } catch {
