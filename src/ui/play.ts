@@ -1,3 +1,4 @@
+import { done, step } from '../diag';
 import { JUDGE_LABEL, type Judgment } from '../core/judge';
 import { Game, type GameHud, type GameResult } from '../game/game';
 import { settings, submitBest } from '../game/settings';
@@ -119,14 +120,20 @@ export class PlayScreen implements Screen, GameHud {
     }
     noticeDevice();
     try {
+      step('game', this.pkg.level.meta.title);
       await this.game.start();
+      // 처음 몇 초를 넘기면 무사한 것으로 (그 사이 꺼지면 다음에 '플레이 중'으로 알림)
+      step('play', this.pkg.level.meta.title);
+      setTimeout(() => done('play'), 15000);
     } catch (e) {
+      done();
       await alertBox('레벨을 시작할 수 없습니다', [(e as Error).message]);
       void show(this.opts.back());
     }
   }
 
   exit(): void {
+    done();
     this.game?.destroy();
     this.game = null;
   }

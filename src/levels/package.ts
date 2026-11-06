@@ -1,3 +1,4 @@
+import { done, step } from '../diag';
 import { strFromU8, unzipSync, zipSync, strToU8 } from 'fflate';
 import { compileChart } from '../core/chart';
 import { parseLevelJson, serializeLevel } from '../core/level';
@@ -197,8 +198,11 @@ export function refreshedAdofai(files: Map<string, Uint8Array>, level: LevelData
 function packageFromAdofai(flat: Map<string, Uint8Array>, name: string, id: string, pre?: ReturnType<typeof convertAdofai>): LevelPackage {
   let conv: ReturnType<typeof convertAdofai>;
   try {
+    step('convert', name);
     conv = pre ?? convertAdofai(strFromU8(flat.get(name)!));
+    done('convert');
   } catch (e) {
+    done('convert');
     throw new PackageError([`${name}: ${(e as Error).message}`]);
   }
   const warnings = ['얼음과 불의 춤 레벨을 변환했습니다. 개인 플레이용으로만 쓰고, 원작 음원·맵은 공개로 올리지 마세요.', ...conv.warnings];
@@ -316,10 +320,12 @@ export async function filesFromList(list: FileList | File[]): Promise<Map<string
   if (arr.length === 0) throw new PackageError(['선택된 파일이 없습니다.']);
   const files = new Map<string, Uint8Array>();
   for (const f of arr) {
+    step('read', `${f.name} ${Math.round(f.size / 1048576)}MB`);
     const data = new Uint8Array(await f.arrayBuffer());
     if (lower(f.name).endsWith('.zip')) {
       let entries: Record<string, Uint8Array>;
       try {
+        step('unzip', `${f.name} ${Math.round(f.size / 1048576)}MB`);
         entries = unzipSync(data);
       } catch (e) {
         throw new PackageError([`zip 파일을 열 수 없습니다: ${(e as Error).message}`]);
@@ -330,6 +336,7 @@ export async function filesFromList(list: FileList | File[]): Promise<Map<string
       files.set(rel, data);
     }
   }
+  done('read', 'unzip');
   return files;
 }
 
@@ -359,10 +366,13 @@ export async function loadPackageAudio(pkg: LevelPackage): Promise<AudioBuffer> 
     try {
       // 곡 길이 (레벨 끝 + 여유) — 긴 곡은 낮은 표본율로 풀어 메모리를 아낀다
       const secs = compileChart(pkg.level).lastTime + 10;
+      step('audio', `${pkg.level.settings.songFile} ${Math.round(data.byteLength / 1048576)}MB · ${Math.round(secs)}초`);
       pkg.buffer = await eng.decodeBytes(data, secs);
+      done('audio');
       pkg.synthesized = false;
       return pkg.buffer;
     } catch {
+      done('audio');
       pkg.warnings.push('음원을 디코딩할 수 없어 합성 비트로 대체합니다.');
     }
   }

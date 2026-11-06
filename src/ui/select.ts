@@ -1,3 +1,4 @@
+import { done } from '../diag';
 import { audio } from '../audio/engine';
 import { library } from '../levels/library';
 import { loadPackageAudio, PACKAGE_ACCEPT, packageFromFileList, packageFromSong, PackageError, songFromZip, SONG_OR_ZIP_ACCEPT, type LevelPackage } from '../levels/package';
@@ -139,11 +140,13 @@ export class SelectScreen implements Screen {
   private async load(files: FileList | File[]): Promise<void> {
     try {
       const pkg = await packageFromFileList(files);
+      done('read', 'unzip', 'convert');
       library.add(pkg);
       this.sel = null;
       this.select(pkg);
       if (pkg.warnings.length) await alertBox('불러오기 경고', pkg.warnings);
     } catch (e) {
+      done('read', 'unzip', 'convert');
       const lines = e instanceof PackageError ? e.details : [(e as Error).message];
       await alertBox('레벨을 불러올 수 없습니다', lines);
     }
