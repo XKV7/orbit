@@ -395,6 +395,7 @@ function validateActionParams(a: Record<string, unknown>, type: ActionType, tile
       if (a.parts !== undefined && (!isNum(a.parts) || !Number.isInteger(a.parts) || a.parts < 1 || a.parts > 64)) return 'parts는 1~64 정수여야 합니다.';
       return a.mirror === undefined || typeof a.mirror === 'boolean' ? null : 'mirror는 true/false여야 합니다.';
     case 'Hold':
+      if (a.length !== undefined && (!isNum(a.length) || a.length < 0 || a.length > 1000)) return 'length는 0~1000 사이 숫자여야 합니다.';
       if (a.toNext === true && isNum(a.beats) && a.beats === 0) return null;
       if (a.toNext !== undefined && typeof a.toNext !== 'boolean') return 'toNext는 true/false여야 합니다.';
       return isNum(a.beats) && a.beats > 0 && a.beats <= MAX_EXTRA_BEATS ? null : `beats는 0보다 크고 ${MAX_EXTRA_BEATS} 이하인 숫자여야 합니다.`;

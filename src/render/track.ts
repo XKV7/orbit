@@ -174,9 +174,17 @@ export class TrackView {
     if ((t.holdBeats > 0 || t.holdToNext) && t.angleOut !== null) {
       // 긴 캡슐형 홀드 타일
       const h = new Graphics();
-      const f = sv(t.angleOut, TILE_LEN * 0.5);
-      h.moveTo(0, 0).lineTo(f.x, f.y).stroke({ width: BAND_W + 10, color: 0xffd36b, alpha: 0.35, cap: 'round' });
-      h.moveTo(0, 0).lineTo(f.x, f.y).stroke({ width: BAND_W - 14, color: 0xffd36b, alpha: 0.8, cap: 'round' });
+      if (t.holdEnd) {
+        // 원작 홀드 타일: 홀드 끝까지 뻗은 가는 막대 (행성이 그 위를 미끄러진다) — 타일 크기 배율은 되돌려 월드 길이로
+        const s = Math.max(0.05, t.baseScale);
+        const f = { x: t.holdEnd.x / s, y: -t.holdEnd.y / s };
+        h.moveTo(0, 0).lineTo(f.x, f.y).stroke({ width: 14, color: 0xffd36b, alpha: 0.3, cap: 'round' });
+        h.moveTo(0, 0).lineTo(f.x, f.y).stroke({ width: 5, color: 0xffffff, alpha: 0.85, cap: 'round' });
+      } else {
+        const f = sv(t.angleOut, TILE_LEN * 0.5);
+        h.moveTo(0, 0).lineTo(f.x, f.y).stroke({ width: BAND_W + 10, color: 0xffd36b, alpha: 0.35, cap: 'round' });
+        h.moveTo(0, 0).lineTo(f.x, f.y).stroke({ width: BAND_W - 14, color: 0xffd36b, alpha: 0.8, cap: 'round' });
+      }
       root.addChildAt(h, 0);
       o.hold = h;
     }

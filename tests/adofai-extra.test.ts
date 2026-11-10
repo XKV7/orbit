@@ -15,7 +15,7 @@ function level(obj: Record<string, unknown>) {
 describe('원작 이벤트: 홀드·자동 진행·공전 곡선·조건 연출', () => {
   it('Hold 추가 바퀴 0 → 다음 타일까지 누르는 홀드 (박은 그대로)', () => {
     const r = level({ angleData: [0, 0, 0, 0], actions: [{ floor: 1, eventType: 'Hold', duration: 0 }] });
-    expect(r.level.actions).toContainEqual({ floor: 1, type: 'Hold', beats: 0, toNext: true });
+    expect(r.level.actions).toContainEqual({ floor: 1, type: 'Hold', beats: 0, toNext: true, length: 0.6 });
     expect(r.warnings.join(' ')).not.toContain('Hold');
     const ch = compileChart(r.level);
     expect(ch.tiles[1].holdToNext).toBe(true);

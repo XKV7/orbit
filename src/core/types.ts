@@ -76,6 +76,11 @@ export interface HoldAction extends ActionBase {
   beats: number;
   /** 원작 Hold(추가 바퀴 0): 다음 타일에 도착할 때까지 누르고 있다가 그때 뗀다 (떼기가 다음 타일 판정) */
   toNext?: boolean;
+  /**
+   * 홀드 타일 길이 (타일 칸, 원작 Hold): 다음 타일까지 그만큼 더 멀고, 누르는 동안 행성이 그 위를 미끄러진다.
+   * 원작 = 0.6 × (2 × 추가 바퀴 + 1) × distanceMultiplier/100. 없으면 0.
+   */
+  length?: number;
 }
 /** 이 타일부터 자동으로 진행 (원작 AutoPlayTiles). */
 export interface AutoPlayAction extends ActionBase {
