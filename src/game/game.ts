@@ -765,6 +765,12 @@ export class Game {
 
     const tile = ch.tiles[vcur];
     const pivot = this.track.pos(vcur);
+    // 원작 홀드 타일: 누르는 동안 축 행성이 긴 홀드 타일을 따라 다음 타일 쪽으로 미끄러진다
+    if (tile.holdEnd && tile.duration > 0) {
+      const k = Math.max(0, Math.min(1, (tr - tile.time) / tile.duration));
+      pivot.x += tile.holdEnd.x * k;
+      pivot.y -= tile.holdEnd.y * k;
+    }
     const angle = orbiterAngle(tile, tr);
     const tail: number[] = [];
     for (let k = 1; k <= 8; k++) {

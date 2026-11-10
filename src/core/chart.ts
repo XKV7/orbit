@@ -32,6 +32,13 @@ export interface ChartTile {
   holdBeats: number;
   /** 원작 0바퀴 홀드: 다음 타일까지 누르고 있다가 도착할 때 뗀다 */
   holdToNext: boolean;
+  /** 홀드 타일 길이 (월드 단위, 원작 Hold). 0이면 일반 타일 */
+  holdLen: number;
+  /**
+   * 홀드 끝 (이 타일 기준 월드 벡터): 누르는 동안 축 행성이 여기까지 미끄러진다.
+   * = 다음 타일 자리 − 나가는 방향 × 반지름 간격 (PositionTrack으로 다음 타일을 옮겨도 그쪽으로 — 원작 ofnr 1:51)
+   */
+  holdEnd: { x: number; y: number } | null;
   /** 이 타일에서 나가는 입력을 게임이 자동으로 (원작 AutoPlayTiles) */
   auto: boolean;
   /** 공전 곡선 (원작 SetPlanetRotation). null = 일정한 속도 */
@@ -100,11 +107,14 @@ export function compileChart(level: LevelData): Chart {
   {
     const rad = new Map<number, number>();
     for (const a of level.actions) if (a.type === 'Planets' && a.spacing && a.radius !== undefined && a.floor >= 0 && a.floor < n) rad.set(a.floor, a.radius);
+    // 원작 Hold: 홀드 타일 길이만큼 다음 타일이 더 멀다
+    const hold = new Map<number, number>();
+    for (const a of level.actions) if (a.type === 'Hold' && a.length && a.floor >= 0 && a.floor < n) hold.set(a.floor, (hold.get(a.floor) ?? 0) + a.length);
     let r = 1;
     for (let i = 0; i < path.length; i++) {
       const v = rad.get(i);
       if (v !== undefined) r = v;
-      lens[i] = TILE_LEN * r;
+      lens[i] = TILE_LEN * (r + (hold.get(i) ?? 0));
     }
   }
   const pos = tilePositions(path, lens);
@@ -146,6 +156,7 @@ export function compileChart(level: LevelData): Chart {
     let pauseBeats = 0;
     let holdBeats = 0;
     let holdToNext = false;
+    let holdLen = 0;
     let text: string | null = null;
     const prevBpm = bpm;
     for (const a of byFloor[i]) {
@@ -169,6 +180,7 @@ export function compileChart(level: LevelData): Chart {
         case 'Hold':
           holdBeats += a.beats;
           if (a.toNext) holdToNext = true;
+          holdLen += (a.length ?? 0) * TILE_LEN;
           break;
         case 'AutoPlay':
           auto = a.enabled;
@@ -200,6 +212,7 @@ export function compileChart(level: LevelData): Chart {
       pauseBeats = 0;
       holdBeats = 0;
       holdToNext = false;
+      holdLen = 0;
     }
     const beats = thetaToBeats(theta) + pauseBeats + holdBeats;
     const extra = pauseBeats + holdBeats;
@@ -220,6 +233,8 @@ export function compileChart(level: LevelData): Chart {
       pauseBeats,
       holdBeats,
       holdToNext: holdToNext && holdBeats === 0,
+      holdLen,
+      holdEnd: null,
       auto,
       orbitEase,
       conds,
@@ -247,6 +262,13 @@ export function compileChart(level: LevelData): Chart {
     beatPos += beats;
   }
 
+  for (let i = 0; i + 1 < tiles.length; i++) {
+    const t = tiles[i];
+    if (!(t.holdLen > 0) || t.angleOut === null) continue;
+    const rr = lens[i] - t.holdLen; // 반지름 간격
+    const a = (t.angleOut * Math.PI) / 180;
+    t.holdEnd = { x: tiles[i + 1].x - t.x - Math.cos(a) * rr, y: tiles[i + 1].y - t.y - Math.sin(a) * rr };
+  }
   const visual: TimedAction[] = [];
   const cond = new Map<string, TimedAction[]>();
   for (const a of level.actions) {

@@ -847,9 +847,15 @@ export function convertAdofai(text: string): AdofaiResult {
         // 원작 Hold의 duration = 추가로 도는 바퀴 수 (1바퀴 = 2박)
         const laps = num(e.duration, 0);
         if (floor >= last || midSet.has(floor)) bump(approx, 'Hold(미드스핀·마지막 타일)');
-        else if (laps > 0) actions.push({ floor, type: 'Hold', beats: Math.min(MAX_EXTRA_BEATS, laps * 2) });
-        // 추가 바퀴 0 = 다음 타일까지 누르고 있다가 도착할 때 뗀다
-        else actions.push({ floor, type: 'Hold', beats: 0, toNext: true });
+        else {
+          // 홀드 타일 길이: 0.6 × (2 × 바퀴 + 1) × 배율 — ofnr 1770(1바퀴·100%)·10116(0바퀴·500%)을 원작 녹화와 맞춘 값
+          const mult = Math.max(0, num(e.distanceMultiplier, 100)) / 100;
+          const length = Math.min(1000, 0.6 * (2 * Math.max(0, laps) + 1) * mult);
+          const h: Action =
+            laps > 0 ? { floor, type: 'Hold', beats: Math.min(MAX_EXTRA_BEATS, laps * 2) } : { floor, type: 'Hold', beats: 0, toNext: true }; // 추가 바퀴 0 = 다음 타일까지 누르고 있다가 도착할 때 뗀다
+          if (length > 0) h.length = length;
+          actions.push(h);
+        }
         break;
       }
       case 'Checkpoint':

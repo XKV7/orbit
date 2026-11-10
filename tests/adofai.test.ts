@@ -84,7 +84,7 @@ describe('.adofai 변환', () => {
     ]);
     expect(byType('Twirl')).toEqual([{ floor: 3, type: 'Twirl' }]);
     expect(byType('Pause')).toEqual([{ floor: 4, type: 'Pause', beats: 2 }]);
-    expect(byType('Hold')).toEqual([{ floor: 5, type: 'Hold', beats: 2 }]);
+    expect(byType('Hold')).toEqual([{ floor: 5, type: 'Hold', beats: 2, length: expect.closeTo(1.8, 5) }]);
     expect(byType('Checkpoint')).toHaveLength(1);
     expect(byType('RecolorTrack').filter((a) => a.floor === 6)).toEqual([{ floor: 6, type: 'RecolorTrack', from: 6, to: 8, color: '#ff0000', duration: 1 }]);
     expect(byType('Camera')[0]).toMatchObject({ zoom: 0.5, rotation: 30, offset: [TILE_LEN, 2 * TILE_LEN], ease: 'inOutQuad', duration: 2 });
