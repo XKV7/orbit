@@ -3,7 +3,7 @@ import { lerpColor, parseColor } from './color';
 import { ease } from './ease';
 import { lerp } from './math';
 import { FILTER_NEUTRAL_ONE } from './level';
-import type { DecoMask, Decoration, EaseName, TrackAppear, TrackDisappear, TrackStyle } from './types';
+import type { DecoMask, DecoTileIcon, Decoration, EaseName, TrackAppear, TrackDisappear, TrackStyle } from './types';
 
 /** 카메라 기준점 (월드 좌표, y 위쪽). player = 현재 행성 타일을 따라감. */
 export type CameraAnchor = { kind: 'player' } | { kind: 'fixed'; x: number; y: number };
@@ -59,6 +59,9 @@ export interface DecoState {
   depth: number;
   /** 글자 장식의 지금 글자 (null = 처음 글자) */
   text: string | null;
+  /** 타일 도형의 꺾임 각도·아이콘 (원작 SetObject로 바뀜) */
+  tileAngle: number;
+  tileIcon: DecoTileIcon | null;
   /** 입자: 방출 중인지, 방출 시작 시각 (초) */
   emitting: boolean;
   emitSince: number;
@@ -228,6 +231,8 @@ export class VisualTimeline {
       mask: null,
       depth: -1,
       text: null,
+      tileAngle: 180,
+      tileIcon: null,
       emitting: false,
       emitSince: 0,
       burst: 0,
@@ -304,6 +309,8 @@ export class VisualTimeline {
       d.mask = d.def.mask ?? null;
       d.depth = d.def.depth ?? -1;
       d.text = null;
+      d.tileAngle = d.def.tileAngle ?? 180;
+      d.tileIcon = d.def.tileIcon ?? null;
       d.emitting = !!d.def.particle?.autoPlay;
       d.emitSince = 0;
       d.burst = 0;
@@ -703,6 +710,8 @@ export class VisualTimeline {
           if (a.mask !== undefined) d.mask = a.mask === 'none' ? null : a.mask;
           if (a.depth !== undefined) d.depth = a.depth;
           if (a.text !== undefined) d.text = a.text;
+          if (a.tileAngle !== undefined) d.tileAngle = a.tileAngle;
+          if (a.tileIcon !== undefined) d.tileIcon = a.tileIcon;
           if (a.particle === 'start') {
             d.emitting = true;
             d.emitSince = ev.time;

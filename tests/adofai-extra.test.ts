@@ -124,4 +124,27 @@ describe('원작 이벤트: 홀드·자동 진행·공전 곡선·조건 연출'
     expect(tl.decos[0].pvx).toBe(-200);
     expect(tl.decos[0].pvy).toBe(0);
   });
+
+  it('AddObject: 행성 기준(RedPlanet/BluePlanet), 꺾임 각도·아이콘, SetObject로 바꾸기', () => {
+    const r = level({
+      angleData: [0, 0, 0],
+      decorations: [
+        { floor: 0, eventType: 'AddObject', objectType: 'Planet', relativeTo: 'RedPlanet', tag: 'p0' },
+        { floor: 0, eventType: 'AddObject', objectType: 'Planet', relativeTo: 'BluePlanet', tag: 'p1' },
+        { floor: 1, eventType: 'AddObject', objectType: 'Floor', trackAngle: 30, trackIcon: 'DoubleRabbit', relativeTo: 'Tile', tag: 'f' },
+      ],
+      actions: [{ floor: 1, eventType: 'SetObject', tag: 'f', trackAngle: 150, trackIcon: 'Snail', duration: 0 }],
+    });
+    const [p0, p1, f] = r.level.decorations ?? [];
+    expect(p0.relativeTo).toBe('red');
+    expect(p1.relativeTo).toBe('blue');
+    expect(f).toMatchObject({ tileAngle: 30, tileIcon: 'speedUp2' });
+    expect(f.rotation).toBeUndefined();
+    expect(r.level.actions).toContainEqual(expect.objectContaining({ type: 'MoveDecorations', tag: 'f', tileAngle: 150, tileIcon: 'speedDown' }));
+    const ch = compileChart(r.level);
+    const tl = new VisualTimeline(ch);
+    tl.update(ch.times[2]);
+    expect(tl.decos[2].tileAngle).toBe(150);
+    expect(tl.decos[2].tileIcon).toBe('speedDown');
+  });
 });

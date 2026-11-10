@@ -246,15 +246,31 @@ export function compileChart(level: LevelData): Chart {
       list.push({ action: a, time: ((a.delay ?? 0) * 60) / t.bpm, duration: (beats * 60) / t.bpm });
       continue;
     }
-    // delay: 타일을 친 뒤 몇 박 늦게 (그 타일의 BPM 기준 — 원작 angleOffset)
+    // delay: 타일을 친 뒤 몇 박 늦게 (원작 angleOffset = 행성이 그만큼 더 돈 뒤) — 도중에 BPM이 바뀌면 바뀐 속도로 센다.
+    // (이벤트 타일 BPM 하나로 세면 ofnr 7:27의 '앞 타일 하나씩 드러내기'가 행성보다 한참 늦었다)
     // 첫 타일의 즉시 이벤트(길이 0, 지연 없음)는 레벨 시작 상태 — 카운트다운 전부터 적용
     const atStart = a.floor === 0 && !a.delay && !(beats > 0);
-    visual.push({ action: a, time: atStart ? -1e9 : t.time + ((a.delay ?? 0) * 60) / t.bpm, duration: (beats * 60) / t.bpm });
+    const time = atStart ? -1e9 : a.delay ? timeAtBeat(tiles, t.beatPos + a.delay) : t.time;
+    visual.push({ action: a, time, duration: (beats * 60) / t.bpm });
   }
   visual.sort((a, b) => a.time - b.time);
 
   for (const list of cond.values()) list.sort((a, b) => a.time - b.time);
   return { level, tiles, times, visual, cond, finish: n - 1, lastTime: times[n - 1] };
+}
+
+/** 누적 박 위치 b의 곡 시각 (타일마다의 BPM으로; 처음·끝 밖은 그 타일 BPM으로 늘려 잡는다). */
+export function timeAtBeat(tiles: readonly ChartTile[], b: number): number {
+  let lo = 0;
+  let hi = tiles.length - 1;
+  if (b <= tiles[0].beatPos) return tiles[0].time + ((b - tiles[0].beatPos) * 60) / tiles[0].bpm;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (tiles[mid].beatPos <= b) lo = mid;
+    else hi = mid - 1;
+  }
+  const t = tiles[lo];
+  return t.time + ((b - t.beatPos) * 60) / t.bpm;
 }
 
 /** 타일 i가 축일 때 곡 시각 t에서 공전 행성의 각도 (도). */

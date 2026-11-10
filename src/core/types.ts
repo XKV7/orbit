@@ -226,9 +226,14 @@ export interface TrackAnimAction extends ActionBase {
   beatsBehind?: number;
 }
 /** 장식 움직이기 (원작 MoveDecorations). tag는 공백으로 여러 개. */
+export type DecoTileIcon = 'speedUp' | 'speedUp2' | 'speedDown' | 'speedDown2' | 'twirl' | 'checkpoint';
+export const DECO_TILE_ICONS: DecoTileIcon[] = ['speedUp', 'speedUp2', 'speedDown', 'speedDown2', 'twirl', 'checkpoint'];
 export interface MoveDecorationsAction extends ActionBase {
   type: 'MoveDecorations';
   tag: string;
+  /** 타일 도형의 꺾임 각도·아이콘 바꾸기 (원작 SetObject) — 아이콘 null = 없앰 */
+  tileAngle?: number;
+  tileIcon?: DecoTileIcon | null;
   /** 원래 위치 기준 이동량 (월드 단위, y 위쪽). null인 축은 그대로. */
   offset?: [number | null, number | null];
   rotation?: number;
@@ -358,7 +363,7 @@ export interface Decoration {
   image?: string;
   text?: string;
   /** 기준: tile(floor 타일) · global(월드 원점) · camera(화면 중앙, 카메라와 함께 움직임). */
-  relativeTo?: 'tile' | 'global' | 'camera';
+  relativeTo?: 'tile' | 'global' | 'camera' | 'red' | 'blue';
   floor?: number;
   position?: [number, number];
   /** 회전 중심 이동 (월드 단위). */
@@ -396,6 +401,10 @@ export interface Decoration {
   tileStyle?: 'neon' | 'neonlight' | 'minimal';
   /** 타일 도형을 미드스핀(짧은 뾰족한 타일) 모양으로 */
   midspin?: boolean;
+  /** 타일 도형의 꺾임 각도 (원작 trackAngle: 180 = 곧은 타일, 90 = 직각, 360 = 끝 막음) */
+  tileAngle?: number;
+  /** 타일 도형 위 아이콘 */
+  tileIcon?: DecoTileIcon;
   /** 입자 장식 (원작 AddParticle). image가 입자 그림. */
   particle?: ParticleDef;
 }

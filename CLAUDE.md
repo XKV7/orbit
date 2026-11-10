@@ -31,7 +31,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 187개 통과)
+npx vitest run         # 테스트 (현재 189개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -77,6 +77,10 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - **미드스핀(999) 위치**: 미드스핀 타일에서는 나아가지 않는다 — 다음 타일이 같은 자리 (#79). 근거: 원작 angleData[k] = k+1번 타일이 놓이는 방향, 999는 방향 없음 (AdofaiTweaks `angleData.Insert(floor.seqID - 1, …)`); 원작 맵 미드스핀은 대부분 앞뒤 같은 각도(…180, 999, 180, 999…)로 쓰이고, ofnr 3:18 녹화에서 행성이 고리를 그리며 계속 나아간다. 되돌아가는 규칙(#77, 그 전 전부)은 이런 줄을 제자리에서 접어 **모든 커스텀 맵**의 미드스핀 구간이 깨졌다. #74→#77 되돌림은 잘못된 판단 ('Phantigma 뒤틀림'은 앞 타일이 안 보이던 문제 #78로 보임). 위치 규칙은 **원작 녹화에서 행성 궤적**으로 확인할 것.
 - PositionTrack → `TrackBase` (타일 원래 위치·기본 회전·크기·불투명도, MoveTrack은 이 값 기준). 이 타일만(justThisTile)이면 그 타일만, 아니면 위치는 뒤로 누적·나머지는 다음 변경까지 (ofnr 48~62번이 원작에서 끝까지 안 보이는 것으로 확인).
 - Hide → 타일 아이콘·판정 글자 숨김. 월드 장식 lockScale은 **레벨 시작 줌** 기준 (ofnr 돌 고리 크기 원작과 일치).
+- 장식·오브젝트 `relativeTo` RedPlanet/BluePlanet(GreenPlanet은 빨강으로) → `red`/`blue`: 그 행성을 따라다닌다 (#80, ofnr '시계' 장면 — 행성 덮개·두 번째 행성 쌍). 게임이 매 프레임 `deco.planetPos`를 넣는다.
+- AddObject 타일 모양: 원작 `trackAngle`(180 곧게·90 직각·360 끝 막음)·`trackIcon`(토끼·달팽이·소용돌이·체크포인트)을 진짜 타일과 같은 모양 함수로 그린다 (`tileAngle`·`tileIcon`, SetObject로 바뀜). 예전엔 곧은 직사각형을 돌려 흉내 — '그냥 직사각형'. 검증: 원작 길 복사 오브젝트(ofnr rzbA)는 회전 = a[f-1], trackAngle = 180 − (a[f] − a[f-1]) — 이 공식으로 그리면 진짜 길과 똑같이 겹친다.
+- 이벤트 지연(angleOffset)은 **누적 박 위치**로 센다 (`timeAtBeat`): 도중에 BPM이 바뀌면 바뀐 속도로 (#80).
+- 원작 녹화 HUD 아래 숫자 줄은 판정 개수(너무 빠름·빠름·약간 빠름·완벽·약간 느림·느림·너무 느림·놓침…) — 원작은 **미드스핀도 판정 하나로 센다**. 이걸 더하면 ofnr 타이밍은 원작과 1초 안으로 일치.
 - 확장자 없는 장식 그림 이름('============= ACT 0' 같은 구분용)은 그림 없음. AddObject 타일도 8자리 색 알파·trackOpacity 반영.
 - 트랙 스타일 NeonLight는 별도 모양(밝은 속 + 흰 테두리).
 - JSON에 쉼표가 빠진 .adofai도 읽는다 (선형 시간 관대한 파서).
