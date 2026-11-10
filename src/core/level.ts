@@ -402,7 +402,7 @@ function validateActionParams(a: Record<string, unknown>, type: ActionType, tile
       if (a.relativeTo !== undefined && !['player', 'tile', 'global', 'last'].includes(a.relativeTo as string))
         return "relativeTo는 'player', 'tile', 'global', 'last' 중 하나여야 합니다.";
       if (a.tile !== undefined && (!isNum(a.tile) || !Number.isInteger(a.tile) || a.tile < 0 || a.tile >= tileCount)) return 'tile은 타일 번호여야 합니다.';
-      return first(optNum('zoom', 0.05, 20), optNum('rotation'), vec('offset'), optNum('duration', 0, MAX_EFFECT_BEATS), easeOk());
+      return first(optNum('zoom', 0.05, 20), optNum('rotation'), vecN('offset'), optNum('duration', 0, MAX_EFFECT_BEATS), easeOk());
     case 'Flash':
       return first(
         a.color !== undefined && !isColor(a.color) ? 'color 형식이 잘못되었습니다.' : null,

@@ -874,7 +874,11 @@ export function convertAdofai(text: string): AdofaiResult {
         const cam: Action = { floor, type: 'Camera', duration: dur(e.duration, 1) };
         if (e.zoom !== undefined && e.zoom !== null) cam.zoom = Math.max(0.05, Math.min(20, 100 / Math.max(1, num(e.zoom, 100))));
         if (e.rotation !== undefined && e.rotation !== null) cam.rotation = num(e.rotation, 0);
-        if (Array.isArray(e.position) && e.position.some((v) => v !== null)) cam.offset = [num(e.position[0], 0) * TILE_LEN, num(e.position[1], 0) * TILE_LEN];
+        // 빈 축(null)은 그 축을 그대로 둔다 (ofnr 10582: y만 바꾸는 이벤트가 x를 0으로 되돌려 마법진이 화면 오른쪽으로 치우쳤다)
+        if (Array.isArray(e.position) && e.position.some((v) => v !== null && v !== undefined)) {
+          const ax = (v: unknown) => (v === null || v === undefined ? null : num(v, 0) * TILE_LEN);
+          cam.offset = [ax(e.position[0]), ax(e.position[1])];
+        }
         const ease = mapEase(e.ease);
         if (ease) cam.ease = ease;
         // 기준을 비워 두면 앞의 기준을 이어 쓴다 — 타일 기준이면 이 이벤트의 타일 (원작)

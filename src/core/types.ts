@@ -98,7 +98,8 @@ export interface CameraAction extends ActionBase {
   tile?: number;
   zoom?: number;
   rotation?: number;
-  offset?: [number, number];
+  /** 기준점에서 떨어진 위치 (월드 단위). null인 축은 그대로 (원작 position의 빈 칸) */
+  offset?: [number | null, number | null];
   duration?: number;
   ease?: EaseName;
 }

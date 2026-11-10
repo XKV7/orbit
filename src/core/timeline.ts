@@ -499,18 +499,33 @@ export class VisualTimeline {
     switch (a.type) {
       case 'Camera': {
         const from = { ...this.camera };
-        const setsPos = a.relativeTo !== undefined || a.offset !== undefined;
+        const rel = a.relativeTo;
+        // 축마다 따로 (원작 position의 빈 칸 = 그 축은 그대로, 진행 중인 그 축 이동도 계속된다)
+        const offX = a.offset ? a.offset[0] : undefined;
+        const offY = a.offset ? a.offset[1] : undefined;
+        const resetBoth = rel !== undefined && rel !== 'last' && !a.offset;
+        const ox1: number | null = rel === 'last' ? (offX ?? 0) : offX !== undefined && offX !== null ? offX : resetBoth ? 0 : null;
+        const oy1: number | null = rel === 'last' ? (offY ?? 0) : offY !== undefined && offY !== null ? offY : resetBoth ? 0 : null;
+        const setsX = ox1 !== null;
+        const setsY = oy1 !== null;
+        const setsPos = rel !== undefined || setsX || setsY;
         const setsZoom = a.zoom !== undefined;
         const setsRot = a.rotation !== undefined;
         // 이 이벤트가 정하는 속성의 이전 이동은 멈춘다 (지금 값에서 이어서 시작)
         this.active = this.active.filter(
-          (x) => !((setsPos && x.chan === 'cam.pos') || (setsZoom && x.chan === 'cam.zoom') || (setsRot && x.chan === 'cam.rot')),
+          (x) =>
+            !(
+              (setsX && x.chan === 'cam.px') ||
+              (setsY && x.chan === 'cam.py') ||
+              (setsPos && x.chan === 'cam.anchor') ||
+              (setsZoom && x.chan === 'cam.zoom') ||
+              (setsRot && x.chan === 'cam.rot')
+            ),
         );
         // 새 기준점: 지정이 없으면 그대로
         let anchor = from.anchor;
         let ox0 = from.ox;
         let oy0 = from.oy;
-        const rel = a.relativeTo;
         if (rel === 'player') anchor = PLAYER;
         else if (rel === 'global') anchor = { kind: 'fixed', x: 0, y: 0 };
         else if (rel === 'tile') {
@@ -525,13 +540,13 @@ export class VisualTimeline {
           ox0 = 0;
           oy0 = 0;
           from.anchor = anchor;
+          this.camera.ox = 0;
+          this.camera.oy = 0;
         }
         const changed = rel !== undefined && rel !== 'last' && !sameAnchor(anchor, from.anchor);
         const to = {
           zoom: a.zoom ?? from.zoom,
           rotation: a.rotation ?? from.rotation,
-          ox: a.offset ? a.offset[0] : rel && rel !== 'last' ? 0 : ox0,
-          oy: a.offset ? a.offset[1] : rel && rel !== 'last' ? 0 : oy0,
         };
         // 기준이 바뀌는 도중에 또 바뀌면: 지금 보이는 자리(오프셋 뺀 것)를 이전 기준으로 삼아 끊김 없이
         let prevEff = from.anchor;
@@ -542,15 +557,15 @@ export class VisualTimeline {
         const prev = changed ? prevEff : anchor;
         const mid = rel === 'last' || changed || from.mix >= 1 ? null : { prevAnchor: from.prevAnchor, mix: from.mix };
         const k0 = (p: number) => ease(a.ease as EaseName | undefined, p);
+        if (setsX) this.active.push({ ev, chan: 'cam.px', apply: (p) => (this.camera.ox = lerp(ox0, ox1!, k0(p))) });
+        if (setsY) this.active.push({ ev, chan: 'cam.py', apply: (p) => (this.camera.oy = lerp(oy0, oy1!, k0(p))) });
         if (setsPos)
           this.active.push({
             ev,
-            chan: 'cam.pos',
+            chan: 'cam.anchor',
             apply: (p) => {
               const k = k0(p);
               const c = this.camera;
-              c.ox = lerp(ox0, to.ox, k);
-              c.oy = lerp(oy0, to.oy, k);
               c.anchor = anchor;
               if (changed) {
                 c.prevAnchor = prev;
