@@ -74,6 +74,9 @@ export interface TileAnimCfg {
   ahead: number;
   disappear: TrackDisappear;
   behind: number;
+  /** 박 수를 정한 이벤트 타일의 1박 길이 (초) — 원작은 박을 그 이벤트 시점의 BPM으로 센다 */
+  aheadBeat: number;
+  behindBeat: number;
 }
 
 /** 타일 하나의 등장·퇴장 결과. */
@@ -242,6 +245,10 @@ export class VisualTimeline {
         const next: TileAnimCfg = {
           appear: a.appear ?? cur?.appear ?? 'none',
           ahead: a.beatsAhead ?? cur?.ahead ?? 3,
+          // 원작: '몇 박'은 이 이벤트가 놓인 타일의 BPM 기준 (타일마다의 BPM이면 빠른 구간에서 앞 타일이 거의 안 보였다 —
+          // Phantigma 2:06 원작 22개·이 규칙 23개, ofnr 1:15 원작 약 40개·이 규칙 40개, 타일 BPM 규칙은 5개·4개)
+          aheadBeat: a.beatsAhead !== undefined || !cur ? 60 / chart.tiles[a.floor].bpm : cur.aheadBeat,
+          behindBeat: a.beatsBehind !== undefined || !cur ? 60 / chart.tiles[a.floor].bpm : cur.behindBeat,
           disappear: a.disappear ?? cur?.disappear ?? 'none',
           behind: a.beatsBehind ?? cur?.behind ?? 4,
         };
@@ -378,8 +385,10 @@ export class VisualTimeline {
     const cfg = this.tileAnim[i];
     if (!cfg) return null;
     const tile = this.chart.tiles[i];
-    // 원작 beatsAhead·beatsBehind는 그 타일 속도의 박 (원작 녹화와 맞음)
+    // 애니메이션 길이는 그 타일 속도 기준, 몇 박 앞·뒤는 박 수를 정한 이벤트의 BPM 기준
     const beat = 60 / tile.bpm;
+    const aheadSec = cfg.ahead * cfg.aheadBeat;
+    const behindSec = cfg.behind * cfg.behindBeat;
     const out: TileAnimResult = { alpha: 1, scale: 1, dx: 0, dy: 0, rot: 0 };
     const len = Math.min(0.35, beat); // 애니메이션 길이 (초)
     const seed = Math.sin(i * 12.9898) * 43758.5453;
@@ -387,8 +396,8 @@ export class VisualTimeline {
     const ry = ((seed * 7.13) % 1 + 1) % 1 * 2 - 1;
     // 등장 전에 이동 이벤트가 불투명도를 정했으면 그 값이 우선 (등장 애니메이션 없음)
     const opSet = this.tileOpSet[i];
-    if (cfg.appear !== 'none' && !(opSet <= tile.time - cfg.ahead * beat)) {
-      const t0 = tile.time - cfg.ahead * beat;
+    if (cfg.appear !== 'none' && !(opSet <= tile.time - aheadSec)) {
+      const t0 = tile.time - aheadSec;
       const p = (t - t0) / len;
       if (p <= 0) return { ...out, alpha: 0 };
       if (p < 1) {
@@ -423,7 +432,7 @@ export class VisualTimeline {
       }
     }
     if (cfg.disappear !== 'none') {
-      const t1 = tile.time + cfg.behind * beat;
+      const t1 = tile.time + behindSec;
       // 흩어지기는 원작처럼 천천히 멀리 떠다니다 사라진다
       const p = (t - t1) / (cfg.disappear === 'scatter' ? 1.8 : len);
       if (p >= 1) return { ...out, alpha: 0 };

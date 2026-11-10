@@ -146,7 +146,11 @@ export class Game {
     this.noFail = !!opts.noFail;
     this.speed = settings.playbackSpeed > 0 ? settings.playbackSpeed : 1;
     this.pitch = this.chart.level.settings.pitch * this.speed;
-    this.startFloor = Math.max(0, Math.min(opts.startFloor ?? 0, this.chart.finish - 1));
+    // 자동 시험용: window.__orbitStartAt = 곡 시각(초)이면 그 시각의 타일부터 시작 (긴 곡을 처음부터 틀지 않고 원작 녹화와 비교)
+    const startAt = (window as unknown as { __orbitStartAt?: number }).__orbitStartAt;
+    let sf = opts.startFloor ?? 0;
+    if (typeof startAt === 'number') while (sf + 1 < this.chart.finish && this.chart.times[sf + 1] <= startAt) sf++;
+    this.startFloor = Math.max(0, Math.min(sf, this.chart.finish - 1));
     // 타격음 바꾸기는 타일 기준, 소리 재생은 시각 기준
     const n = this.chart.tiles.length;
     this.hitKind = new Array(n).fill(null);
