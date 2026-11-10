@@ -67,7 +67,7 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - 필터 duration에 ease 적용.
 - 음수 `angleOffset` = 그만큼 **먼저** 실행 (0으로 자르면 시작 플래시 순서가 뒤집혔다).
 - MoveCamera에서 `relativeTo`가 비면 이전 기준을 이어 쓰고, 타일 기준이면 **이 이벤트의 타일**.
-- AnimateTrack: 에디터는 꺼 둔 칸에도 `beatsAhead: 3`/`beatsBehind: 4` 기본값을 적어 둔다 → 해당 애니메이션(`trackAnimation`/`trackDisappearAnimation`)을 같이 바꿀 때만 박 수를 쓴다. 박은 그 타일 BPM 기준 (곡 시작 BPM 기준은 틀렸음, 되돌림).
+- AnimateTrack: 에디터는 꺼 둔 칸에도 `beatsAhead: 3`/`beatsBehind: 4` 기본값을 적어 둔다 → 해당 애니메이션(`trackAnimation`/`trackDisappearAnimation`)을 같이 바꿀 때만 박 수를 쓴다. **박 길이는 그 박 수를 정한 이벤트(또는 레벨 설정=0번 타일)의 BPM 기준** (#78). 타일마다의 BPM(예전)이면 빠른 구간에서 앞 타일이 거의 안 보였고, 곡 시작 BPM은 Phantigma에서 틀렸다. 검증: Phantigma 2:06 원작 22개·이 규칙 23개, ofnr 1:15 원작 약 40개·이 규칙 40개.
 - MultiPlanet ThreePlanets: 매 타일 공전각 −60° (곧은 길 120°). 대회판 Phantigma 끝 시각이 일반판과 일치하는 것으로 검증.
 - SetConditionalEvents + Kill 히트박스 → 판정 규칙(JudgeRule, 대회 규칙).
 - SetConditionalEvents (일반): **같은 타일**에 있고 조건 칸 태그를 단 이벤트는 제자리에서 실행하지 않고 그 판정(완벽·약간·빠름/느림·너무 빠름·놓침·실패)이 나올 때만 실행 → `Conditional` 액션 + 연출의 `cond` 태그, `VisualTimeline.trigger`. ('NONE' = 빈 칸, 빈 조건 = 끄기)
@@ -100,6 +100,8 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
   - `window.__orbitFreezeAt = 초` → 그 곡 시각에서 화면 멈춤, `window.__orbitSongTime` 현재 곡 시각
   - `window.__orbitStats` 이번 프레임 필터·보이는 타일·장식 수·CPU ms·장식 텍스처 MB
   - `window.__orbitHide = new Set([그림 이름…])` 장식 숨기기 (어느 장식이 화면을 덮는지 찾기), `window.__orbitStage` 스테이지
+  - `window.__orbitStartAt = 초` → 플레이를 그 곡 시각의 타일부터 시작 (긴 곡을 처음부터 틀지 않고 원작 녹화와 비교). 스크래치 shot2.mjs: 시각마다 새 페이지 → 불러오기 → 자동 플레이 → StartAt=t-4, FreezeAt=t → 스크린샷.
+  - ofnr 원작 녹화 14개의 곡 시각: 영상 2초 지점 = 0:07, 0:52, 1:35, 2:22, 3:08, 3:53, 4:40, 5:22, 5:42, 6:25, 7:11, 7:55, 8:37, 9:25 (파일 이름 시각 순, 첫 Chrome 녹화 제외).
 - 흐름: 시작 → 레벨 불러오기(zip) → 경고 모달 확인 → `label:has-text("자동 플레이") input` 체크 → 플레이 → 시각마다 멈춰 스크린샷.
 - 원작 녹화와 맞추기: 녹화 HUD의 진행률(Progress %)이나 Perfect 카운터로 타일 → 곡 시각을 구해 같은 시각끼리 나란히 붙여 비교 (ffmpeg hstack/vstack).
 - 원작 레벨·녹화는 저장소 밖 임시 폴더에만 두고 커밋하지 말 것.
@@ -126,7 +128,7 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - **타일 이동(MoveTrack) 중 공이 타일을 따라가는 시각적 오류** — 사용자가 보고. 공을 착지 위치에 고정하는 수정을 넣었다가 되돌림 (트랙 전체가 미끄러지는 연출은 원작도 공이 따라갈 수 있어 확신 없음). 어느 레벨·몇 초인지와 원작 녹화를 받아 비교한 뒤 고칠 것.
 - 배경(BGA): 레벨별로 남은 차이 — Phantigma 29초 근처 회색 장면, 152초 카메라 줌/위치, 145초 만화 집중선 과함, 전체 채도가 원작보다 낮음. Plum - Timeline은 구름 위치(카메라 구도), 타일 반투명도.
 - 미구현 원작 효과: 필터 LightWater, OilPaint(레거시 SetFilter), Vision 계열 일부, SetHitsound 게임 소리, 홀드 소리, MultiPlanet 4개 이상, FreeRoam. 조건 연출로 부른 PlaySound는 소리 안 남.
-- AWC2026 'Once Forgotten, Nothing Remains'(ofnr, 13330타일, 오브젝트 399개): 살구색 사각형(네온 미드스핀 오브젝트)·회색 돌 고리(번호 없는 오브젝트)는 고침. 남은 차이 — 0:25 이후 원작은 앞 타일이 훨씬 많이 보임(우리 beatsAhead 4박이 너무 적게 보여 줌, 원작 기준 미확인), 행성 색(원작 녹화는 흰색, 플레이어 설정일 수 있음). 원작 녹화는 사용자가 보낸 화면 녹화(HUD에 '음악 시간' 표시).
+- AWC2026 'Once Forgotten, Nothing Remains'(ofnr, 13330타일, 오브젝트 399개): 살구색 사각형(네온 미드스핀 오브젝트)·회색 돌 고리(번호 없는 오브젝트)는 고침. 남은 차이 — 꺾인 타일(특히 네온 스타일 미드스핀 고리, 1:40)의 모서리: 원작은 둥글고 우리는 뾰족해 길쭉한 삼각형처럼 보임, 행성 색(원작 녹화는 흰색, 플레이어 설정일 수 있음). 원작 녹화는 사용자가 보낸 화면 녹화(HUD에 '음악 시간' 표시).
 - `window.__orbitHide`는 장식 태그로도 숨길 수 있다.
 - 판정이 바뀌었으니 사용자에게 다시 보정해 보도록 안내함 — 피드백 받기.
 - "너무 빠름" 하한: 지금은 구간 시간의 절반보다 이른 입력은 무시 (원작은 더 많이 너무 빠름으로 셀 수 있음, 미확인).

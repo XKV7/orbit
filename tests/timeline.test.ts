@@ -300,6 +300,23 @@ describe('원작 연출 타임라인', () => {
     expect(tl.tileAnimAt(10, 4.5)!.alpha).toBe(0);
   });
 
+  it('타일 등장 박 수는 그 애니메이션 이벤트 타일의 BPM 기준 (원작 Phantigma·ofnr 녹화와 일치)', () => {
+    const l = emptyLevel();
+    l.settings.bpm = 60;
+    l.settings.offset = 0;
+    l.path = new Array(20).fill(0);
+    l.actions = [
+      { floor: 0, type: 'TrackAnim', appear: 'fade', beatsAhead: 4 },
+      // 5번 타일부터 4배 빠르게 — 그래도 '4박 앞'은 60 BPM의 4초
+      { floor: 5, type: 'SetSpeed', multiplier: 4 },
+    ];
+    const ch = compileChart(l);
+    const tl = new VisualTimeline(ch);
+    const t10 = ch.tiles[10].time;
+    expect(tl.tileAnimAt(10, t10 - 3.9)!.alpha).toBeGreaterThan(0);
+    expect(tl.tileAnimAt(10, t10 - 4.1)!.alpha).toBe(0);
+  });
+
   it('트랙 이동: 빈 축은 그대로', () => {
     const tl = lv([
       { floor: 1, type: 'MoveTrack', from: 5, to: 5, offset: [100, 50], duration: 0 },
