@@ -52,6 +52,9 @@ export class TrackView {
   private visible = new Set<number>();
   /** 이번 프레임에 보인 타일 수 (진단용) */
   visibleCount = 0;
+  get visibleSet(): ReadonlySet<number> {
+    return this.visible;
+  }
   private pulses = new Map<number, number>();
   private readonly editorMode: boolean;
   /** floor → 아이콘 종류 (객체는 화면에 들어올 때 생성). */
@@ -85,9 +88,10 @@ export class TrackView {
       if (t.twirl) twirled = true;
       if (t.twirl) kinds.push('twirl');
       // 원작처럼: 빨라지면 토끼, 느려지면 달팽이 (2배 이상 바뀌면 두 마리)
-      if (t.speed) {
-        const prev = this.chart.tiles[Math.max(0, t.floor - 1)].bpm;
-        const ratio = t.bpm / prev;
+      // 1% 미만의 BPM 미세 조정에는 아이콘을 그리지 않는다 (ofnr 1:20 고리: 1711→1712.6 BPM 타일에 원작은 아이콘 없음)
+      const prevBpm = this.chart.tiles[Math.max(0, t.floor - 1)].bpm;
+      const ratio = t.bpm / prevBpm;
+      if (t.speed && Math.abs(ratio - 1) >= 0.01) {
         if (t.speed === 'up') kinds.push(ratio >= 2 - 1e-9 ? 'speedUp2' : 'speedUp');
         else kinds.push(ratio <= 0.5 + 1e-9 ? 'speedDown2' : 'speedDown');
       }
@@ -207,6 +211,8 @@ export class TrackView {
       const anim = tl && u.time !== undefined ? tl.tileAnimAt(i, u.time) : null;
       const alpha = (tl ? tl.tileAlpha[i] : 1) * (anim ? anim.alpha : 1);
       if (alpha <= 0.001) continue;
+      // 100% 초과 불투명도는 하얗게 타오름 (원작 MoveTrack 400% 등)
+      const over = alpha > 1 ? alpha : 1;
       nowVisible.add(i);
       let o = this.objs[i] ?? this.make(i);
       // 모양이 바뀌었으면 다시 만든다 (RecolorTrack style)
@@ -217,7 +223,7 @@ export class TrackView {
       this.setVisible(o, true, !!u.showBeats);
       o.root.position.set(x + (anim ? anim.dx : 0), y - (anim ? anim.dy : 0));
       o.root.rotation = -degToRad((tl ? tl.tileRot[i] : 0) + this.chart.tiles[i].baseRot) - (anim ? degToRad(anim.rot) : 0);
-      o.root.alpha = alpha;
+      o.root.alpha = Math.min(1, alpha);
       let base = tl ? tl.tileColor[i] : 0x3a3f55;
       // 물결 (원작 Glow): 두 색 사이를 오간다, 트랙을 따라 퍼지는 모양
       if (tl && tl.tileColor2[i] >= 0) {
@@ -230,6 +236,7 @@ export class TrackView {
         else if (m === 1) base = ph - Math.floor(ph) < 0.5 ? base : tl.tileColor2[i];
         else base = lerpColor(base, tl.tileColor2[i], 0.5 - 0.5 * Math.cos(ph * Math.PI * 2));
       }
+      if (over > 1) base = scaleColor(base, over);
       const passed = i < u.passed;
       const ps = this.pulses.get(i);
       let s = 1;

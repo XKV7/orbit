@@ -1,6 +1,6 @@
 import { compileChart } from '../core/chart';
 import { TILE_LEN } from '../core/math';
-import { defaultMeta, defaultSettings, FILTER_NAMES, MAX_BPM, MAX_EFFECT_BEATS, MAX_EXTRA_BEATS, MAX_MULTIPLIER, validateLevel } from '../core/level';
+import { defaultMeta, defaultSettings, FILTER_NAMES, MAX_BPM, MAX_EFFECT_BEATS, MAX_OVERBRIGHT, MAX_EXTRA_BEATS, MAX_MULTIPLIER, validateLevel } from '../core/level';
 import { EASE_NAMES } from '../core/ease';
 import type { Action, CondSlot, ConditionalAction, DecoTileIcon, JudgeRuleAction, DecoBlend, DecoMask, Decoration, EaseName, LevelData, ParticleDef, RecolorTrackAction, TrackAppear, TrackDisappear, TrackStyle } from '../core/types';
 
@@ -609,7 +609,7 @@ const MAX_REPEATS = 2000;
 
 /**
  * 원작 RepeatEvents를 펼친다: 같은 타일에서 태그가 겹치는 연출 이벤트를
- * Beat — interval 박마다 (angleOffset을 늘려서), Floor — floorCount 타일마다 repetitions 번 더 실행.
+ * Beat — interval 박마다 repetitions 번 더 (angleOffset을 늘려서), Floor — 다음 floorCount개 타일에서 한 번씩.
  * Floor 방식에서 executeOnCurrentFloor가 꺼져 있으면 원래 타일에서는 실행하지 않는다.
  */
 export function expandRepeats(list: unknown[], last: number): unknown[] {
@@ -645,9 +645,11 @@ export function expandRepeats(list: unknown[], last: number): unknown[] {
     for (const r of matched) {
       const n = Math.max(0, Math.min(MAX_REPEATS, Math.round(num(r.repetitions, 1))));
       if (str(r.repeatType) === 'Floor') {
-        const step = Math.max(1, Math.round(num(r.floorCount, 1)));
+        // 다음 floorCount개 타일에서 한 번씩 (반복 횟수·간격 칸은 박 방식에서만 쓴다)
+        // 검증: ofnr 7:21 '지나간 타일 숨기기'(floorCount 9)가 원작에선 다음 9칸에 하나씩 — 'floorCount칸 뒤 한 번'이면 사다리 모양 타일이 남았다
+        const cnt = Math.max(0, Math.min(MAX_REPEATS, Math.round(num(r.floorCount, 1))));
         if (r.executeOnCurrentFloor === false) keepOriginal = false;
-        for (let k = 1; k <= n && floor + k * step <= last; k++) out.push({ ...e, floor: floor + k * step });
+        for (let k = 1; k <= cnt && floor + k <= last; k++) out.push({ ...e, floor: floor + k });
       } else {
         const iv = Math.max(0, num(r.interval, 1));
         const a0 = num(e.angleOffset, 0);
@@ -921,7 +923,7 @@ export function convertAdofai(text: string): AdofaiResult {
           mv.offset = [ax(e.positionOffset[0]), ax(e.positionOffset[1])];
         }
         if (e.rotationOffset !== undefined && e.rotationOffset !== null) mv.rotation = num(e.rotationOffset, 0);
-        if (e.opacity !== undefined && e.opacity !== null) mv.opacity = Math.max(0, Math.min(1, num(e.opacity, 100) / 100));
+        if (e.opacity !== undefined && e.opacity !== null) mv.opacity = Math.max(0, Math.min(MAX_OVERBRIGHT, num(e.opacity, 100) / 100));
         // 가로·세로 크기가 따로면 작은 쪽으로 (한쪽이 0이면 납작해져 안 보이는 것과 비슷하게)
         const scs = Array.isArray(e.scale) ? e.scale.filter((v) => v !== null && Number.isFinite(Number(v))).map(Number) : [];
         const sc = Array.isArray(e.scale) ? (scs.length ? Math.min(...scs) : undefined) : e.scale;
@@ -1118,7 +1120,8 @@ export function convertAdofai(text: string): AdofaiResult {
         break;
       }
       case 'ScaleRadius':
-        vis({ floor, type: 'Planets', radius: Math.max(0, Math.min(100, num(e.scale, 100) / 100)), duration: 0 });
+        // 원작 ScaleRadius는 다음 타일까지의 간격도 바꾼다 (ofnr 1:20 반지름 244% 고리·1:22 눈꽃이 원작에선 띄엄띄엄 넓게 — 우리는 촘촘히 뭉쳤다)
+        vis({ floor, type: 'Planets', radius: Math.max(0, Math.min(100, num(e.scale, 100) / 100)), spacing: true, duration: 0 });
         break;
       case 'HallOfMirrors':
         vis({ floor, type: 'Screen', mirrors: onOff(e.enabled) });
@@ -1209,7 +1212,8 @@ export function convertAdofai(text: string): AdofaiResult {
           a.color = c;
           a.alpha = adofaiAlpha(e.color);
         }
-        if (e.opacity !== undefined && e.opacity !== null) a.opacity = Math.max(0, Math.min(1, num(e.opacity, 100) / 100));
+        // 100% 초과 = 원작처럼 하얗게 타오름 (ofnr 7:21 네온 묶음 1200% → 100%)
+        if (e.opacity !== undefined && e.opacity !== null) a.opacity = Math.max(0, Math.min(MAX_OVERBRIGHT, num(e.opacity, 100) / 100));
         if (e.visible !== undefined) a.visible = onOff(e.visible);
         if (imageName(e.decorationImage)) a.image = imageName(e.decorationImage);
         const mk = maskFrom(e.maskingType);

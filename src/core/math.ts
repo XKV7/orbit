@@ -31,7 +31,8 @@ export function sameAngle(a: number, b: number): boolean {
 }
 
 /** path → 타일 위치 (수학 좌표계, y 위쪽). 길이 = path.length + 1. */
-export function tilePositions(path: readonly number[], len = TILE_LEN, midspins?: ReadonlySet<number>): Vec2[] {
+/** len: 한 칸 길이 (숫자) 또는 칸마다의 길이 (원작 ScaleRadius) */
+export function tilePositions(path: readonly number[], len: number | readonly number[] = TILE_LEN, midspins?: ReadonlySet<number>): Vec2[] {
   const out: Vec2[] = [{ x: 0, y: 0 }];
   let x = 0;
   let y = 0;
@@ -39,8 +40,9 @@ export function tilePositions(path: readonly number[], len = TILE_LEN, midspins?
     // 미드스핀 타일에서는 나아가지 않는다: 다음 타일이 같은 자리 (원작 angleData의 999 = 방향 없는 타일)
     if (!midspins?.has(i)) {
       const r = degToRad(path[i]);
-      x += len * Math.cos(r);
-      y += len * Math.sin(r);
+      const l = typeof len === 'number' ? len : (len[i] ?? TILE_LEN);
+      x += l * Math.cos(r);
+      y += l * Math.sin(r);
     }
     out.push({ x, y });
   }

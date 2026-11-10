@@ -8,6 +8,8 @@ export const MAX_BPM = 10_000_000;
 export const MAX_MULTIPLIER = 100_000;
 export const MAX_EXTRA_BEATS = 10_000;
 /** 연출 이벤트(카메라·번쩍임·트랙 색/이동) 지속 시간 한계 (박). */
+/** 불투명도 100% 초과 (원작: 1200%처럼 주면 색이 하얗게 타오른다) 최대 배율 */
+export const MAX_OVERBRIGHT = 20;
 export const MAX_EFFECT_BEATS = 10_000_000;
 
 /** 게임이 그리는 필터 (원작 이름). 목록에 없는 이름도 저장은 되지만 무시된다. */
@@ -419,7 +421,7 @@ function validateActionParams(a: Record<string, unknown>, type: ActionType, tile
       if (a.pulseBack !== undefined && typeof a.pulseBack !== 'boolean') return 'pulseBack은 true/false여야 합니다.';
       return first(range(), isColor(a.color) ? null : 'color가 필요합니다.', optNum('duration', 0, MAX_EFFECT_BEATS), optNum('glowDuration', 0.01, 1000), optNum('pulseLength', 0, 100000), optNum('lit', 0, 1), optNum('gap', 0, 100000));
     case 'MoveTrack':
-      return first(range(), vecN('offset'), optNum('rotation'), optNum('opacity', 0, 1), optNum('scale', 0, 100), optNum('gap', 0, 100000), optNum('duration', 0, MAX_EFFECT_BEATS), easeOk());
+      return first(range(), vecN('offset'), optNum('rotation'), optNum('opacity', 0, MAX_OVERBRIGHT), optNum('scale', 0, 100), optNum('gap', 0, 100000), optNum('duration', 0, MAX_EFFECT_BEATS), easeOk());
     case 'Background':
       if (a.color === undefined && a.image === undefined && a.video === undefined) return 'color, image, video 중 하나가 필요합니다.';
       if (a.video !== undefined && typeof a.video !== 'string') return 'video는 파일 이름 문자열이어야 합니다.';
@@ -474,12 +476,13 @@ function validateActionParams(a: Record<string, unknown>, type: ActionType, tile
         vecN('pivot'),
         optNum('alpha', 0, 1),
         optNum('rotation'),
-        optNum('opacity', 0, 1),
+        optNum('opacity', 0, MAX_OVERBRIGHT),
         a.color !== undefined && !isColor(a.color) ? 'color 형식이 잘못되었습니다.' : null,
         optNum('duration', 0, MAX_EFFECT_BEATS),
         easeOk(),
       );
     case 'Planets':
+      if (a.spacing !== undefined && typeof a.spacing !== 'boolean') return 'spacing은 true/false여야 합니다.';
       return first(optNum('radius', 0, 100), optNum('size', 0, 100), optNum('duration', 0, MAX_EFFECT_BEATS), easeOk());
     case 'Screen':
       if (a.mirrors !== undefined && typeof a.mirrors !== 'boolean') return 'mirrors는 true/false여야 합니다.';

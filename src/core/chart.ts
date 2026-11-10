@@ -94,8 +94,20 @@ export function compileChart(level: LevelData): Chart {
   // 미드스핀 타일도 한 칸 나아가고(이전 방향의 반대), 다음 타일은 그 앞 타일 자리 — 원작과 같다.
   // 검증: ofnr 8:20 '마법진'(미드스핀 뒤 14타일 묶음 17개)이 이 규칙에서만 완벽한 대칭 눈꽃이 되고, Phantigma 길도 이 규칙에서 깔끔하다.
   // ('제자리' 규칙 #74·#79는 두 맵 모두 어긋나게 해 되돌렸다 — #81)
-  const pos = tilePositions(path, TILE_LEN);
   const n = path.length + 1;
+  // 원작 ScaleRadius: 그 타일에서 다음 타일까지의 간격 = 반지름 (행성이 타일에 내려앉는다)
+  const lens: number[] = new Array(path.length);
+  {
+    const rad = new Map<number, number>();
+    for (const a of level.actions) if (a.type === 'Planets' && a.spacing && a.radius !== undefined && a.floor >= 0 && a.floor < n) rad.set(a.floor, a.radius);
+    let r = 1;
+    for (let i = 0; i < path.length; i++) {
+      const v = rad.get(i);
+      if (v !== undefined) r = v;
+      lens[i] = TILE_LEN * r;
+    }
+  }
+  const pos = tilePositions(path, lens);
   const byFloor: Action[][] = Array.from({ length: n }, () => []);
   for (const a of level.actions) if (a.floor >= 0 && a.floor < n) byFloor[a.floor].push(a);
 

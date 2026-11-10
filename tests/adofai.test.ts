@@ -332,7 +332,7 @@ describe('극단적인 BPM (Hello (BPM) 류)', () => {
     const white = fl.filter((a) => a.type === 'Flash' && a.color === '#ffffff').map((a) => a.delay ?? 0).sort();
     expect(white).toEqual([0, 0.5, 1]);
     expect(fl.filter((a) => a.type === 'Flash' && a.color === '#ff0000')).toHaveLength(1);
-    expect(fl.filter((a) => a.type === 'Flash' && a.color === '#00ff00').map((a) => a.floor).sort((x, y) => x - y)).toEqual([3, 8, 13, 18]);
+    expect(fl.filter((a) => a.type === 'Flash' && a.color === '#00ff00').map((a) => a.floor).sort((x, y) => x - y)).toEqual([3, 4, 5, 6, 7, 8]);
     expect(r.warnings.join()).not.toContain('RepeatEvents');
   });
   it('확장 필터(SetFilterAdvanced)를 비슷한 필터로', () => {
