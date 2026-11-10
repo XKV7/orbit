@@ -185,6 +185,12 @@ function imageName(v: unknown): string {
 }
 
 /** 원작 타일 아이콘 이름 → ORBIT 아이콘 (없거나 모르는 것은 null) */
+/** 원작 trackStyle → 타일 오브젝트 스타일 */
+function tileStyleFrom(v: unknown): 'standard' | 'neon' | 'neonlight' | 'minimal' {
+  const st = str(v);
+  return st === 'Neon' ? 'neon' : st === 'NeonLight' ? 'neonlight' : st === 'Minimal' || st === 'Basic' ? 'minimal' : 'standard';
+}
+
 function tileIconFrom(v: unknown): DecoTileIcon | null {
   switch (str(v)) {
     case 'Snail':
@@ -235,10 +241,8 @@ function objectFrom(e: Record<string, unknown>, floor: number): Decoration | nul
   const a = adofaiAlpha(colKey) * (planet ? 1 : num(e.trackOpacity, 100) / 100);
   if (a < 1) d.opacity = Math.max(0, a * (d.opacity ?? 1));
   if (!planet) {
-    const st = str(e.trackStyle);
-    if (st === 'Neon') d.tileStyle = 'neon';
-    else if (st === 'NeonLight') d.tileStyle = 'neonlight';
-    else if (st === 'Minimal' || st === 'Basic') d.tileStyle = 'minimal';
+    const st = tileStyleFrom(e.trackStyle);
+    if (st !== 'standard') d.tileStyle = st;
     if (str(e.trackType) === 'Midspin') d.midspin = true;
     // 꺾임 각도는 진짜 타일 모양으로 그린다 (예전: 곧은 직사각형을 돌려 흉내 — '그냥 직사각형'으로 보였다)
     const ang = num(e.trackAngle, 180);
@@ -1080,12 +1084,14 @@ export function convertAdofai(text: string): AdofaiResult {
         if (!tag) break;
         const key = e.planetColor !== undefined ? e.planetColor : e.trackColor;
         const c = adofaiColor(key);
-        const hasShape = e.trackAngle !== undefined || e.trackIcon !== undefined;
+        const tStyle = e.trackStyle !== undefined ? tileStyleFrom(e.trackStyle) : undefined;
+        const hasShape = e.trackAngle !== undefined || e.trackIcon !== undefined || tStyle !== undefined;
         if (!c && e.trackOpacity === undefined && !hasShape) break;
         const a: Action = { floor, type: 'MoveDecorations', tag, duration: dur(e.duration, 0) };
         if (c) a.color = c;
         if (e.trackAngle !== undefined) a.tileAngle = num(e.trackAngle, 180);
         if (e.trackIcon !== undefined) a.tileIcon = tileIconFrom(e.trackIcon);
+        if (tStyle !== undefined) a.tileStyle = tStyle;
         if (e.planetColor !== undefined) a.opacity = adofaiAlpha(e.planetColor);
         else if (/^#?[0-9a-fA-F]{8}$/.test(str(e.trackColor).trim()) || e.trackOpacity !== undefined)
           a.opacity = adofaiAlpha(e.trackColor) * (e.trackOpacity !== undefined ? num(e.trackOpacity, 100) / 100 : 1);
@@ -1205,6 +1211,11 @@ export function convertAdofai(text: string): AdofaiResult {
         const mk = maskFrom(e.maskingType);
         if (mk) a.mask = mk;
         if (e.depth !== undefined && e.depth !== null && Number.isFinite(Number(e.depth))) a.depth = Number(e.depth);
+        // 기준 바꾸기 (원작 relativeTo): LastPosition = 지금 자리 기준 — ofnr 시계의 '한 걸음씩 굴러가는 행성'
+        const mrel = str(e.relativeTo);
+        const mr = mrel === 'LastPosition' || mrel === 'LastPositionNoRotation' ? 'last' : mrel === 'Tile' ? 'tile' : mrel === 'Global' ? 'global' : mrel === 'Camera' || mrel === 'CameraAspect' ? 'camera' : mrel === 'RedPlanet' || mrel === 'GreenPlanet' ? 'red' : mrel === 'BluePlanet' ? 'blue' : null;
+        // 위치 이동이 없는 이벤트의 기준은 무시한다 (원작 기준 칸은 위치 이동에 딸린 값 — ofnr 10600의 'rzppR 기준 = 타일'만 있는 이벤트가 행성을 옮겼다)
+        if (mr && off) a.relativeTo = mr;
         const ease = mapEase(e.ease);
         if (ease) a.ease = ease;
         vis(a);

@@ -234,6 +234,13 @@ export interface MoveDecorationsAction extends ActionBase {
   /** 타일 도형의 꺾임 각도·아이콘 바꾸기 (원작 SetObject) — 아이콘 null = 없앰 */
   tileAngle?: number;
   tileIcon?: DecoTileIcon | null;
+  /** 타일 도형 스타일 바꾸기 (원작 SetObject trackStyle) — standard = 기본 */
+  tileStyle?: 'standard' | 'neon' | 'neonlight' | 'minimal';
+  /**
+   * 기준 바꾸기 (원작 MoveDecorations relativeTo): last = 지금 자리 기준(offset을 지금 위치에 더함),
+   * tile = 이 이벤트의 타일, 그 밖은 장식 정의와 같은 뜻
+   */
+  relativeTo?: 'tile' | 'global' | 'camera' | 'red' | 'blue' | 'last';
   /** 원래 위치 기준 이동량 (월드 단위, y 위쪽). null인 축은 그대로. */
   offset?: [number | null, number | null];
   rotation?: number;

@@ -208,9 +208,13 @@ export class DecorationView {
   private shapeTile(o: Obj, d: DecoState): void {
     const t = o.tile;
     if (!t) return;
-    const key = `${d.tileAngle}|${d.tileIcon ?? ''}`;
+    const key = `${d.tileAngle}|${d.tileIcon ?? ''}|${d.tileStyle}`;
     if (t.key === key) return;
     t.key = key;
+    // 스타일: 몸통 색(tint) × 바깥·안쪽 밝기 (원작 SetObject trackStyle로 바뀐다 — ofnr 마법진 가로줄은 네온)
+    const st = d.tileStyle;
+    t.outer.tint = st === 'neon' || st === 'neonlight' || st === 'minimal' ? 0xffffff : 0x8c8c8c;
+    t.inner.tint = st === 'neon' ? 0x101010 : st === 'neonlight' ? 0xe8e8e8 : 0xffffff;
     // 원작 trackAngle: 들어오는 방향(왼쪽에서)과 나가는 방향 사이 각 — 180 = 곧게, 90 = 직각, 360(0) = 끝 막음
     const a = ((d.tileAngle % 360) + 360) % 360;
     const out = a === 0 ? 180 : 180 - a;
@@ -243,10 +247,6 @@ export class DecorationView {
       const o: Obj = { node: root, image: null, masked: null, tile: { body, outer: new Graphics(), inner: new Graphics(), icon: new Graphics(), key: '' } };
       body.addChild(o.tile!.outer, o.tile!.inner);
       root.addChild(o.tile!.icon);
-      // 스타일: 몸통 색(tint) × 바깥·안쪽 밝기
-      const st = def.tileStyle;
-      o.tile!.outer.tint = st === 'neon' || st === 'neonlight' || st === 'minimal' ? 0xffffff : 0x8c8c8c;
-      o.tile!.inner.tint = st === 'neon' ? 0x101010 : st === 'neonlight' ? 0xe8e8e8 : 0xffffff;
       this.shapeTile(o, d);
       return o;
     }
@@ -560,7 +560,7 @@ export class DecorationView {
       const px = (def.position?.[0] ?? 0) + d.ox;
       const py = (def.position?.[1] ?? 0) + d.oy;
       // 크기는 절대값 (타임라인이 장식 정의 크기에서 시작)
-      const rel = def.relativeTo ?? 'tile';
+      const rel = d.rel ?? def.relativeTo ?? 'tile';
       // 원작 줌: 카메라에 붙은 장식은 카메라와 함께 커지고 작아져 화면에서 그대로 보이고(위치도),
       // lockScale이면 반대로 월드 크기를 지킨다. 월드 장식은 lockScale일 때만 화면 크기를 지킨다.
       // (Phantigma 장면 전환 사각형: 줌아웃 상태에서 원래 계산이면 화면 밖으로 못 빠져 화면을 계속 덮었다)
@@ -586,7 +586,7 @@ export class DecorationView {
         y = camY + vx * sin + vy * cos;
         r -= rc;
       } else {
-        const tile = rel === 'tile' ? this.chart.tiles[Math.min(this.chart.tiles.length - 1, def.floor ?? 0)] : null;
+        const tile = rel === 'tile' ? this.chart.tiles[Math.min(this.chart.tiles.length - 1, d.relFloor)] : null;
         // 원작 RedPlanet·BluePlanet 기준: 그 행성을 따라다닌다 (행성 덮개·두 번째 행성 쌍 — ofnr '시계' 장면)
         const pl = rel === 'red' ? this.planetPos[0] : rel === 'blue' ? this.planetPos[1] : null;
         const bx = pl ? pl.x : tile ? tile.x : 0;
@@ -627,6 +627,8 @@ export class DecorationView {
           const px = nat * DECO_PX * Math.max(Math.abs(sx), Math.abs(sy)) * this.pxPerWorld;
           need.set(d.image, Math.max(need.get(d.image) ?? 0, Math.min(nat, px)));
         }
+        // 원작 pivotOffset: 장식 자리가 회전 중심이고 그림은 (회전·크기 배율을 곱해) 그만큼 옮겨진다.
+        // 검증: ofnr 시계의 흰 행성 쌍(크기 250%, 1.1, 처음 회전 180)이 한 걸음 2.75씩, rz4 쌍(150%, 1)이 1.5씩 끊김 없이 굴러간다
         if (d.pvx || d.pvy || def.pivot) node.anchor.set(0.5 - d.pvx / (tw * DECO_PX), 0.5 + d.pvy / (th * DECO_PX));
       } else {
         node.scale.set(sx, sy);

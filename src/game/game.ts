@@ -468,7 +468,8 @@ export class Game {
 
   /** 원작 SetConditionalEvents: 타일 from에서 나간 판정이 조건에 맞으면 그 태그의 연출을 시작 */
   private fireCond(from: number, j: Judgment | 'loss', t0: number): void {
-    const c = this.chart.tiles[Math.max(0, Math.min(this.chart.finish, from))]?.conds;
+    const f = Math.max(0, Math.min(this.chart.finish, from));
+    const c = this.chart.tiles[f]?.conds;
     if (!c) return;
     const tags = new Set<string>();
     if (j === 'loss') {
@@ -478,7 +479,7 @@ export class Game {
       if (slot) tags.add(slot);
       if (advances(j) && c.hit) tags.add(c.hit);
     }
-    for (const tag of tags) this.timeline.trigger(tag, t0);
+    for (const tag of tags) this.timeline.trigger(f, tag, t0);
   }
 
   private advance(j: Judgment): void {
@@ -827,6 +828,8 @@ export class Game {
       screen: screenFs.map((f) => f.constructor.name),
       world: worldFs.length,
       back: backN,
+      planetSize: tl.planetSize,
+      cur: this.cur,
       mirror: tl.mirrors,
       quality: stage.qualityLevel,
       decos: vis(this.deco.behind) + vis(this.deco.front),
