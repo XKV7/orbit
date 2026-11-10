@@ -66,9 +66,15 @@ export function blockContexts(angleIn: number | null, angleOut: number | null, m
     else if (b) c.moveTo(b.x, b.y).lineTo(0, 0);
     else if (f) c.moveTo(0, 0).lineTo(f.x, f.y);
     else c.moveTo(-1, 0).lineTo(1, 0);
-    c.stroke({ width: w, color: 0xffffff, cap: 'butt', join: 'miter', miterLimit: 3 });
-    // 한쪽만 있는 타일(시작·끝·미드스핀)은 중심 쪽 끝도 네모나게
-    if (!(b && f)) c.rect(-w / 2, -w / 2, w, w).fill({ color: 0xffffff });
+    // 원작처럼: 크게 꺾이는(예각) 타일은 바깥 모서리가 둥글다 — 각진 이음이면 길쭉한 가시가 됐다 (ofnr 1:40 네온 고리).
+    // 90°까지 꺾이는 보통 타일은 각진 그대로.
+    const acute = !!(back && fwd) && back.x * fwd.x + back.y * fwd.y > 1e-6;
+    c.stroke({ width: w, color: 0xffffff, cap: 'butt', join: acute ? 'round' : 'miter', miterLimit: 3 });
+    if (!(b && f)) {
+      // 한쪽만 있는 타일: 미드스핀은 끝이 둥근 D자, 시작·끝 타일은 네모
+      if (midspin) c.circle(0, 0, w / 2).fill({ color: 0xffffff });
+      else c.rect(-w / 2, -w / 2, w, w).fill({ color: 0xffffff });
+    }
   };
   const outer = new GraphicsContext();
   draw(outer, BLOCK_W, 0.5);
