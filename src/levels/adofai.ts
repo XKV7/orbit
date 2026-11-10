@@ -2,7 +2,7 @@ import { compileChart } from '../core/chart';
 import { TILE_LEN } from '../core/math';
 import { defaultMeta, defaultSettings, FILTER_NAMES, MAX_BPM, MAX_EFFECT_BEATS, MAX_EXTRA_BEATS, MAX_MULTIPLIER, validateLevel } from '../core/level';
 import { EASE_NAMES } from '../core/ease';
-import type { Action, CondSlot, ConditionalAction, JudgeRuleAction, DecoBlend, DecoMask, Decoration, EaseName, LevelData, ParticleDef, RecolorTrackAction, TrackAppear, TrackDisappear, TrackStyle } from '../core/types';
+import type { Action, CondSlot, ConditionalAction, DecoTileIcon, JudgeRuleAction, DecoBlend, DecoMask, Decoration, EaseName, LevelData, ParticleDef, RecolorTrackAction, TrackAppear, TrackDisappear, TrackStyle } from '../core/types';
 
 /**
  * 얼음과 불의 춤(.adofai) 레벨 → ORBIT 레벨 변환. 순수 함수.
@@ -184,6 +184,26 @@ function imageName(v: unknown): string {
   return /\.[a-z0-9]{2,5}$/i.test(n) ? n : '';
 }
 
+/** 원작 타일 아이콘 이름 → ORBIT 아이콘 (없거나 모르는 것은 null) */
+function tileIconFrom(v: unknown): DecoTileIcon | null {
+  switch (str(v)) {
+    case 'Snail':
+      return 'speedDown';
+    case 'DoubleSnail':
+      return 'speedDown2';
+    case 'Rabbit':
+      return 'speedUp';
+    case 'DoubleRabbit':
+      return 'speedUp2';
+    case 'Swirl':
+      return 'twirl';
+    case 'Checkpoint':
+      return 'checkpoint';
+    default:
+      return null;
+  }
+}
+
 /** 원작 SetConditionalEvents 칸 → ORBIT 판정 조건 */
 const COND_FIELDS: [string, CondSlot][] = [
   ['perfectTag', 'perfect'],
@@ -220,8 +240,11 @@ function objectFrom(e: Record<string, unknown>, floor: number): Decoration | nul
     else if (st === 'NeonLight') d.tileStyle = 'neonlight';
     else if (st === 'Minimal' || st === 'Basic') d.tileStyle = 'minimal';
     if (str(e.trackType) === 'Midspin') d.midspin = true;
+    // 꺾임 각도는 진짜 타일 모양으로 그린다 (예전: 곧은 직사각형을 돌려 흉내 — '그냥 직사각형'으로 보였다)
     const ang = num(e.trackAngle, 180);
-    if (ang !== 180) d.rotation = (d.rotation ?? 0) + (180 - ang) / 2;
+    if (ang !== 180) d.tileAngle = ang;
+    const icon = tileIconFrom(e.trackIcon);
+    if (icon) d.tileIcon = icon;
   }
   return d;
 }
@@ -353,7 +376,16 @@ function decoFrom(e: Record<string, unknown>, floor: number, isText: boolean): D
   const vec = (v: unknown, d: number): [number, number] => (Array.isArray(v) ? [num(v[0], d), num(v[1], d)] : [d, d]);
   const pos = vec(e.position, 0);
   const d: Decoration = {
-    relativeTo: rel === 'Global' ? 'global' : rel === 'Camera' || rel === 'CameraAspect' ? 'camera' : 'tile',
+    relativeTo:
+      rel === 'Global'
+        ? 'global'
+        : rel === 'Camera' || rel === 'CameraAspect'
+          ? 'camera'
+          : rel === 'RedPlanet' || rel === 'GreenPlanet'
+            ? 'red'
+            : rel === 'BluePlanet'
+              ? 'blue'
+              : 'tile',
     floor,
     position: [pos[0] * TILE_LEN, pos[1] * TILE_LEN],
   };
@@ -1048,9 +1080,12 @@ export function convertAdofai(text: string): AdofaiResult {
         if (!tag) break;
         const key = e.planetColor !== undefined ? e.planetColor : e.trackColor;
         const c = adofaiColor(key);
-        if (!c && e.trackOpacity === undefined) break;
+        const hasShape = e.trackAngle !== undefined || e.trackIcon !== undefined;
+        if (!c && e.trackOpacity === undefined && !hasShape) break;
         const a: Action = { floor, type: 'MoveDecorations', tag, duration: dur(e.duration, 0) };
         if (c) a.color = c;
+        if (e.trackAngle !== undefined) a.tileAngle = num(e.trackAngle, 180);
+        if (e.trackIcon !== undefined) a.tileIcon = tileIconFrom(e.trackIcon);
         if (e.planetColor !== undefined) a.opacity = adofaiAlpha(e.planetColor);
         else if (/^#?[0-9a-fA-F]{8}$/.test(str(e.trackColor).trim()) || e.trackOpacity !== undefined)
           a.opacity = adofaiAlpha(e.trackColor) * (e.trackOpacity !== undefined ? num(e.trackOpacity, 100) / 100 : 1);

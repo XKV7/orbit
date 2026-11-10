@@ -5,7 +5,7 @@ import { lerpColor, parseColor } from '../core/color';
 import { degToRad, TILE_LEN } from '../core/math';
 import type { DecoState, VisualTimeline } from '../core/timeline';
 import type { ParticleDef } from '../core/types';
-import { BLOCK_W, PLANET_R } from './shapes';
+import { blockContexts, iconContext, PLANET_R, type IconKind } from './shapes';
 
 /** 원작 장식 이미지 1px의 월드 크기 (원작: 100px = 1 유닛, 타일 간격 = 1.5 유닛). */
 export const DECO_PX = TILE_LEN / 150;
@@ -46,6 +46,8 @@ interface PSys {
 interface Obj {
   node: Sprite | TilingSprite | Text | Graphics | Container;
   image: string | null;
+  /** 타일 도형 오브젝트 (몸통·아이콘, 지금 모양 키) */
+  tile?: { body: Container; outer: Graphics; inner: Graphics; icon: Graphics; key: string };
   ps?: PSys;
   /** 지금 걸린 가리기 (inside/outside) */
   masked: 'inside' | 'outside' | null;
@@ -165,6 +167,11 @@ export class DecorationView {
 
   /** 레벨 시작 카메라 줌 (월드 장식 lockScale 기준) */
   private startZoom = 1;
+  /** 행성 위치 (화면 좌표, 0 = 빨강/첫째, 1 = 파랑/둘째) — 게임이 매 프레임 넣어 준다 */
+  planetPos: [{ x: number; y: number }, { x: number; y: number }] = [
+    { x: 0, y: 0 },
+    { x: 0, y: 0 },
+  ];
 
   constructor(
     private readonly chart: Chart,
@@ -197,6 +204,23 @@ export class DecorationView {
     return this.objs.length;
   }
 
+  /** 타일 도형 모양 맞추기 (꺾임 각도·아이콘이 바뀌면 다시) */
+  private shapeTile(o: Obj, d: DecoState): void {
+    const t = o.tile;
+    if (!t) return;
+    const key = `${d.tileAngle}|${d.tileIcon ?? ''}`;
+    if (t.key === key) return;
+    t.key = key;
+    // 원작 trackAngle: 들어오는 방향(왼쪽에서)과 나가는 방향 사이 각 — 180 = 곧게, 90 = 직각, 360(0) = 끝 막음
+    const a = ((d.tileAngle % 360) + 360) % 360;
+    const out = a === 0 ? 180 : 180 - a;
+    const ctx = blockContexts(0, out, !!d.def.midspin);
+    t.outer.context = ctx.outer;
+    t.inner.context = ctx.inner;
+    t.icon.visible = !!d.tileIcon;
+    if (d.tileIcon) t.icon.context = iconContext(d.tileIcon as IconKind);
+  }
+
   private makeObj(d: DecoState): Obj {
     const def = d.def;
     if (def.particle) {
@@ -212,29 +236,19 @@ export class DecorationView {
       return { node: g, image: null, masked: null };
     }
     if (def.shape === 'tile') {
-      // 원작 트랙 스타일: 흰색으로 그려 색은 tint로 (검은색은 tint해도 검다)
-      const h = BLOCK_W / 2;
-      const w = def.midspin ? BLOCK_W : TILE_LEN;
-      // 미드스핀: 짧은 몸통 + 뾰족한 끝
-      const outline = (g: Graphics, k: number) =>
-        def.midspin
-          ? g.poly([-w / 2 + k, -h + k, w / 4 - k * 0.5, -h + k, w / 2 - k, 0, w / 4 - k * 0.5, h - k, -w / 2 + k, h - k])
-          : g.rect(-w / 2 + k, -h + k, w - 2 * k, 2 * h - 2 * k);
-      const g = new Graphics();
+      // 원작 타일 오브젝트: 진짜 타일과 같은 모양(꺾임 각도·미드스핀) — 흰색으로 그려 색은 몸통 tint로, 아이콘은 그 위에
+      const root = new Container();
+      const body = new Container();
+      root.addChild(body);
+      const o: Obj = { node: root, image: null, masked: null, tile: { body, outer: new Graphics(), inner: new Graphics(), icon: new Graphics(), key: '' } };
+      body.addChild(o.tile!.outer, o.tile!.inner);
+      root.addChild(o.tile!.icon);
+      // 스타일: 몸통 색(tint) × 바깥·안쪽 밝기
       const st = def.tileStyle;
-      if (st === 'neon') {
-        outline(g, 0).fill({ color: 0xffffff });
-        outline(g, 4).fill({ color: 0x000000 });
-      } else if (st === 'neonlight') {
-        outline(g, 0).fill({ color: 0xffffff });
-        outline(g, 4).fill({ color: 0xffffff, alpha: 0.8 });
-      } else if (st === 'minimal') {
-        outline(g, 0).fill({ color: 0xffffff });
-      } else {
-        outline(g, 0).fill({ color: 0xffffff });
-        outline(g, 5).fill({ color: 0xffffff, alpha: 0.35 });
-      }
-      return { node: g, image: null, masked: null };
+      o.tile!.outer.tint = st === 'neon' || st === 'neonlight' || st === 'minimal' ? 0xffffff : 0x8c8c8c;
+      o.tile!.inner.tint = st === 'neon' ? 0x101010 : st === 'neonlight' ? 0xe8e8e8 : 0xffffff;
+      this.shapeTile(o, d);
+      return o;
     }
     if (def.text !== undefined) return { node: this.makeText(d), image: null, masked: null };
     // 이어 붙인 그림 (원작 tile)
@@ -573,8 +587,10 @@ export class DecorationView {
         r -= rc;
       } else {
         const tile = rel === 'tile' ? this.chart.tiles[Math.min(this.chart.tiles.length - 1, def.floor ?? 0)] : null;
-        const bx = tile ? tile.x : 0;
-        const by = tile ? -tile.y : 0;
+        // 원작 RedPlanet·BluePlanet 기준: 그 행성을 따라다닌다 (행성 덮개·두 번째 행성 쌍 — ofnr '시계' 장면)
+        const pl = rel === 'red' ? this.planetPos[0] : rel === 'blue' ? this.planetPos[1] : null;
+        const bx = pl ? pl.x : tile ? tile.x : 0;
+        const by = pl ? pl.y : tile ? -tile.y : 0;
         // 카메라 따라가기 (원작 parallax): 장식 자신의 자리에서 카메라가 벗어난 만큼 비율로 따라가고,
         // parallaxOffset은 그 위에 그대로 더한다 (BIKE 산 장식: 위·아래로 벌려 두는 값 — 비율을 곱하면 화면 가운데를 덮었다).
         // 100%면 화면 가운데에 고정. 기준을 장식이 붙은 타일로 잡으면 멀리 놓인 큰 배경(Hello (BPM) 2025의 하늘)이 화면 밖으로 나갔다
@@ -597,7 +613,10 @@ export class DecorationView {
         }
         continue;
       }
-      if (node instanceof Sprite || node instanceof TilingSprite || node instanceof Text || node instanceof Graphics) node.tint = d.color;
+      if (o.tile) {
+        o.tile.body.tint = d.color;
+        this.shapeTile(o, d);
+      } else if (node instanceof Sprite || node instanceof TilingSprite || node instanceof Text || node instanceof Graphics) node.tint = d.color;
       if (node instanceof Sprite || node instanceof TilingSprite) {
         const f = this.texFactor.get(node.texture) ?? 1;
         const tw = (node.texture.width || 1) * f;
@@ -612,7 +631,7 @@ export class DecorationView {
       } else {
         node.scale.set(sx, sy);
         // 도형·글자: 회전 중심 이동 (그림과 같이 크기를 곱한 만큼 옮겨진다)
-        if (node instanceof Graphics && (d.pvx || d.pvy || node.pivot.x || node.pivot.y)) node.pivot.set(-d.pvx, d.pvy);
+        if (!(node instanceof Text) && (d.pvx || d.pvy || node.pivot.x || node.pivot.y)) node.pivot.set(-d.pvx, d.pvy);
       }
     }
     for (const [k, v] of need) this.needSide.set(k, v);

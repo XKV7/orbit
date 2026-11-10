@@ -799,6 +799,9 @@ export class Game {
       stage.camera.shakeX += (Math.random() - 0.5) * 24 * quake;
       stage.camera.shakeY += (Math.random() - 0.5) * 24 * quake;
     }
+    // 행성 기준 장식 (원작 RedPlanet·BluePlanet): A = 빨강(첫째), B = 파랑(둘째)
+    this.deco.planetPos[0] = { x: this.planets.a.x, y: this.planets.a.y };
+    this.deco.planetPos[1] = { x: this.planets.b.x, y: this.planets.b.y };
     this.deco.update(stage.camera.x, stage.camera.y, stage.camera.rotation, tr, stage.camera.zoom, stage.baseScale * stage.camera.zoom * stage.app.renderer.resolution);
     this.screenFx.screenH = stage.height;
     const glowFs = this.screenFx.worldFilters(tl.bloom, reduce, this.chart.level.settings.glow ?? 1);

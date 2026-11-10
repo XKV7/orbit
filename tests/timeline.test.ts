@@ -317,6 +317,21 @@ describe('원작 연출 타임라인', () => {
     expect(tl.tileAnimAt(10, t10 - 4.1)!.alpha).toBe(0);
   });
 
+  it('이벤트 지연(박)은 도중에 바뀐 BPM으로 센다 (원작 angleOffset)', () => {
+    const l = emptyLevel();
+    l.settings.bpm = 60;
+    l.settings.offset = 0;
+    l.path = new Array(10).fill(0);
+    l.actions = [
+      { floor: 2, type: 'SetSpeed', multiplier: 2 },
+      // 1번 타일에서 3박 뒤: 1박(60 BPM, 1초) + 2박(120 BPM, 1초) = 2초
+      { floor: 1, type: 'Flash', delay: 3, duration: 0 },
+    ];
+    const ch = compileChart(l);
+    const ev = ch.visual.find((v) => v.action.type === 'Flash')!;
+    expect(ev.time - ch.tiles[1].time).toBeCloseTo(2);
+  });
+
   it('트랙 이동: 빈 축은 그대로', () => {
     const tl = lv([
       { floor: 1, type: 'MoveTrack', from: 5, to: 5, offset: [100, 50], duration: 0 },

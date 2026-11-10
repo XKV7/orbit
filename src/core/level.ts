@@ -1,7 +1,7 @@
 import { isColor } from './color';
 import { EASE_NAMES } from './ease';
 import { sameAngle } from './math';
-import { DECO_BLENDS, COND_SLOTS, type CondSlot, type Action, type EaseName, type ActionType, type Decoration, type LevelData, type LevelMeta, type LevelSettings } from './types';
+import { DECO_BLENDS, DECO_TILE_ICONS, COND_SLOTS, type CondSlot, type Action, type EaseName, type ActionType, type Decoration, type LevelData, type LevelMeta, type LevelSettings } from './types';
 
 /** 극단적인 BPM 맵(원작의 'Hello (BPM)' 류)도 담을 수 있게 넉넉히. */
 export const MAX_BPM = 10_000_000;
@@ -297,7 +297,9 @@ function validateDecoration(d: unknown, tileCount: number): string | null {
     const pe = validateParticle(d.particle);
     if (pe) return `particle: ${pe}`;
   }
-  if (d.relativeTo !== undefined && !['tile', 'global', 'camera'].includes(d.relativeTo as string)) return "relativeTo는 'tile', 'global', 'camera' 중 하나여야 합니다.";
+  if (d.relativeTo !== undefined && !['tile', 'global', 'camera', 'red', 'blue'].includes(d.relativeTo as string)) return "relativeTo는 'tile', 'global', 'camera', 'red', 'blue' 중 하나여야 합니다.";
+  if (d.tileAngle !== undefined && !isNum(d.tileAngle)) return 'tileAngle은 숫자여야 합니다.';
+  if (d.tileIcon !== undefined && !DECO_TILE_ICONS.includes(d.tileIcon as never)) return `tileIcon은 ${DECO_TILE_ICONS.join(', ')} 중 하나여야 합니다.`;
   if (d.floor !== undefined && (!isNum(d.floor) || !Number.isInteger(d.floor) || d.floor < 0 || d.floor >= tileCount)) return `floor는 0 ~ ${tileCount - 1} 범위의 정수여야 합니다.`;
   if (d.color !== undefined && !isColor(d.color)) return 'color 형식이 잘못되었습니다.';
   if (d.visible !== undefined && typeof d.visible !== 'boolean') return 'visible은 true/false여야 합니다.';
@@ -459,6 +461,8 @@ function validateActionParams(a: Record<string, unknown>, type: ActionType, tile
       if (a.particle !== undefined && !['start', 'stop', 'clear'].includes(a.particle as string)) return "particle은 'start', 'stop', 'clear' 중 하나여야 합니다.";
       if (a.mask !== undefined && !['none', 'mask', 'inside', 'outside'].includes(a.mask as string)) return "mask는 'none', 'mask', 'inside', 'outside' 중 하나여야 합니다.";
       if (a.depth !== undefined && !isNum(a.depth)) return 'depth는 숫자여야 합니다.';
+      if (a.tileAngle !== undefined && !isNum(a.tileAngle)) return 'tileAngle은 숫자여야 합니다.';
+      if (a.tileIcon !== undefined && a.tileIcon !== null && !DECO_TILE_ICONS.includes(a.tileIcon as never)) return 'tileIcon이 올바르지 않습니다.';
       return first(
         optNum('emit', 0, 100000),
         vecN('offset'),
