@@ -91,7 +91,9 @@ export const VISUAL_TYPES = new Set(['Camera', 'Flash', 'RecolorTrack', 'MoveTra
 /** 레벨을 컴파일해 모든 타일의 위치·박·시각을 미리 계산한다. */
 export function compileChart(level: LevelData): Chart {
   const { path, settings } = level;
-  const pos = tilePositions(path, TILE_LEN, new Set(level.actions.filter((a) => a.type === 'Midspin').map((a) => a.floor)));
+  // 미드스핀 타일도 한 칸 나아간다 (path가 되돌아가는 방향이라 다음 타일은 그 앞 타일 자리) — Phantigma에서 원작과 일치 확인.
+  // (#74에서 '제자리'로 바꿨다가 Phantigma 길이 뒤틀려 되돌림: ofnr에서 근거로 본 타일은 원작에서 숨겨져 있었다)
+  const pos = tilePositions(path, TILE_LEN);
   const n = path.length + 1;
   const byFloor: Action[][] = Array.from({ length: n }, () => []);
   for (const a of level.actions) if (a.floor >= 0 && a.floor < n) byFloor[a.floor].push(a);

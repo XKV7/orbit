@@ -74,7 +74,7 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - Hold 추가 바퀴 0 = 다음 타일까지 누르고 있다가 도착할 때 떼기 (`Hold.toNext`, 떼기가 다음 타일 판정).
 - AutoPlayTiles → `AutoPlay` (그 구간 타일은 게임이 진행, 정확도에 안 넣음). SetPlanetRotation → `PlanetEase` (공전 곡선, 박 불변, easeParts·Mirror). SetHoldSound는 무시.
 - AddObject: 타일 번호가 없으면 0번(빠뜨리면 통째로 사라짐). 트랙 스타일 Neon = 검은 속 + 색 테두리 (트랙 색으로 칠하면 큰 살구색 사각형이 됐다), Minimal/Basic = 단색, trackType Midspin = 짧은 뾰족한 모양. MoveDecorations `pivotOffset` → `pivot` (회전 중심 이동, 애니메이션).
-- **미드스핀(999) 위치**: 원작은 미드스핀 타일에서 앞으로 나아가지 않는다 (다음 타일 = 같은 자리, 공전 행성이 반대편으로 넘어감). 박·시각은 그대로. 예전엔 한 칸 되돌아가 '미드스핀 뱀'이 꽃처럼 한 점에 겹쳤다.
+- **미드스핀(999) 위치**: 미드스핀 타일도 한 칸 나아가고(이전 방향의 반대), 다음 타일은 그 앞 타일 자리에 겹친다. #74에서 '제자리' 규칙으로 바꿨다가 **Phantigma 길이 뒤틀려 #77에서 되돌림** — ofnr에서 근거로 본 타일(49~62번)은 원작에서 숨겨져 있어 근거가 아니었다 (원작 영상에서 행성이 D 오브젝트 근처를 계속 도는 것도 되돌아가는 규칙과 맞음). 위치 규칙을 바꿀 땐 **여러 레벨**(Phantigma·ofnr 등)로 확인할 것.
 - PositionTrack → `TrackBase` (타일 원래 위치·기본 회전·크기·불투명도, MoveTrack은 이 값 기준). 이 타일만(justThisTile)이면 그 타일만, 아니면 위치는 뒤로 누적·나머지는 다음 변경까지 (ofnr 48~62번이 원작에서 끝까지 안 보이는 것으로 확인).
 - Hide → 타일 아이콘·판정 글자 숨김. 월드 장식 lockScale은 **레벨 시작 줌** 기준 (ofnr 돌 고리 크기 원작과 일치).
 - 확장자 없는 장식 그림 이름('============= ACT 0' 같은 구분용)은 그림 없음. AddObject 타일도 8자리 색 알파·trackOpacity 반영.
