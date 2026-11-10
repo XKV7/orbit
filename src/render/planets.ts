@@ -15,6 +15,8 @@ export class PlanetsView {
   readonly c: Graphics;
   private readonly tail = new Graphics();
   private readonly arc = new Graphics();
+  /** 행성 크기 배율 */
+  private size = 1;
 
   /** bold: 트랙·행성 강조 (테두리, 진한 꼬리) */
   constructor(private readonly bold = false) {
@@ -55,15 +57,17 @@ export class PlanetsView {
     this.container.setChildIndex(ob, this.container.children.length - 1);
 
     this.tail.clear();
+    // 꼬리·홀드 고리도 행성 크기를 따른다 (원작 ScalePlanets 0으로 행성을 숨기는 장면에서 꼬리만 남아 보였다 — ofnr 시계)
+    const k0 = this.size;
     const col = aIsPivot ? COLOR_B : COLOR_A;
-    for (let k = 0; k < tailAngles.length; k++) {
+    for (let k = 0; k < tailAngles.length && k0 > 0.01; k++) {
       const tv = sv(tailAngles[k], radius);
       const f = 1 - (k + 1) / (tailAngles.length + 1);
-      this.tail.circle(pivot.x + tv.x, pivot.y + tv.y, PLANET_R * (0.35 + 0.55 * f)).fill({ color: col, alpha: (this.bold ? 0.55 : 0.28) * f });
+      this.tail.circle(pivot.x + tv.x, pivot.y + tv.y, PLANET_R * k0 * (0.35 + 0.55 * f)).fill({ color: col, alpha: (this.bold ? 0.55 : 0.28) * f });
     }
 
     this.arc.clear();
-    if (holdProgress !== null) {
+    if (holdProgress !== null && k0 > 0.01) {
       const p = Math.max(0, Math.min(1, holdProgress));
       this.arc.circle(pivot.x, pivot.y, PLANET_R + 10).stroke({ width: 3, color: 0xffffff, alpha: 0.18 });
       if (p > 0) {
@@ -86,6 +90,7 @@ export class PlanetsView {
 
   /** 행성 크기 배율 (원작 ScalePlanets). */
   setSize(k: number): void {
+    this.size = k;
     this.a.scale.set(k);
     this.b.scale.set(k);
     this.c.scale.set(k);

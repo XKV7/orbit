@@ -462,6 +462,8 @@ function validateActionParams(a: Record<string, unknown>, type: ActionType, tile
       if (a.mask !== undefined && !['none', 'mask', 'inside', 'outside'].includes(a.mask as string)) return "mask는 'none', 'mask', 'inside', 'outside' 중 하나여야 합니다.";
       if (a.depth !== undefined && !isNum(a.depth)) return 'depth는 숫자여야 합니다.';
       if (a.tileAngle !== undefined && !isNum(a.tileAngle)) return 'tileAngle은 숫자여야 합니다.';
+      if (a.relativeTo !== undefined && !['tile', 'global', 'camera', 'red', 'blue', 'last'].includes(a.relativeTo as string)) return 'relativeTo가 올바르지 않습니다.';
+      if (a.tileStyle !== undefined && !['standard', 'neon', 'neonlight', 'minimal'].includes(a.tileStyle as string)) return 'tileStyle이 올바르지 않습니다.';
       if (a.tileIcon !== undefined && a.tileIcon !== null && !DECO_TILE_ICONS.includes(a.tileIcon as never)) return 'tileIcon이 올바르지 않습니다.';
       return first(
         optNum('emit', 0, 100000),

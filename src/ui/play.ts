@@ -144,9 +144,20 @@ export class PlayScreen implements Screen, GameHud {
     if (v === this.lastProg) return;
     this.lastProg = v;
     this.prog.style.width = `${(p * 100).toFixed(1)}%`;
+    this.progPct = p * 100;
+    this.renderAcc();
   }
+  /** 진행도 (%) — 원작 HUD처럼 숫자로도 보여 준다 (막대만 있으면 정확도 숫자를 진행도로 오해했다) */
+  private progPct = 0;
+  private accVal: [number, number | undefined] = [100, undefined];
   setAccuracy(a: number, x?: number): void {
-    const s = x === undefined ? `${a.toFixed(2)}%` : `${a.toFixed(2)}% · 절대 ${x.toFixed(2)}%`;
+    this.accVal = [a, x];
+    this.renderAcc();
+  }
+  private renderAcc(): void {
+    const [a, x] = this.accVal;
+    const acc = x === undefined ? `정확도 ${a.toFixed(2)}%` : `정확도 ${a.toFixed(2)}% · 절대 ${x.toFixed(2)}%`;
+    const s = `진행 ${this.progPct.toFixed(2)}% · ${acc}`;
     if (s === this.lastAcc) return;
     this.lastAcc = s;
     this.acc.textContent = s;

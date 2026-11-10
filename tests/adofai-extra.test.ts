@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compileChart, orbiterAngle } from '../src/core/chart';
+import { compileChart, condKey, orbiterAngle } from '../src/core/chart';
 import { validateLevel } from '../src/core/level';
 import { VisualTimeline } from '../src/core/timeline';
 import { convertAdofai } from '../src/levels/adofai';
@@ -59,6 +59,37 @@ describe('원작 이벤트: 홀드·자동 진행·공전 곡선·조건 연출'
     expect(r.warnings.join(' ')).not.toContain('SetHoldSound');
   });
 
+  it('SetConditionalEvents: 다른 타일에 같은 태그가 있어도 그 타일의 조건만 부른다', () => {
+    const r = level({
+      angleData: [0, 0, 0, 0, 0],
+      actions: [
+        { floor: 1, eventType: 'SetConditionalEvents', perfectTag: 'rj' },
+        { floor: 1, eventType: 'ScalePlanets', scale: 0, duration: 0, eventTag: 'rj' },
+        { floor: 3, eventType: 'SetConditionalEvents', perfectTag: 'rj' },
+        { floor: 3, eventType: 'ScalePlanets', scale: 250, duration: 0, eventTag: 'rj' },
+      ],
+    });
+    const ch = compileChart(r.level);
+    const tl = new VisualTimeline(ch);
+    tl.trigger(1, 'rj', ch.times[2]);
+    tl.update(ch.times[2] + 0.01);
+    expect(tl.planetSize).toBe(0);
+  });
+
+  it('SetObject trackStyle → 타일 오브젝트 스타일 바꾸기', () => {
+    const r = level({
+      angleData: [0, 0, 0],
+      decorations: [{ floor: 0, eventType: 'AddObject', objectType: 'Floor', tag: 'row', trackStyle: 'Standard' }],
+      actions: [{ floor: 1, eventType: 'SetObject', tag: 'row', trackStyle: 'Neon', duration: 0 }],
+    });
+    const ch = compileChart(r.level);
+    const tl = new VisualTimeline(ch);
+    tl.update(ch.times[0]);
+    expect(tl.decos[0].tileStyle).toBe('standard');
+    tl.update(ch.times[2]);
+    expect(tl.decos[0].tileStyle).toBe('neon');
+  });
+
   it('SetConditionalEvents: 같은 타일의 태그 이벤트는 제자리에서 실행하지 않고 판정이 부를 때만', () => {
     const r = level({
       angleData: [0, 0, 0, 0],
@@ -77,13 +108,13 @@ describe('원작 이벤트: 홀드·자동 진행·공전 곡선·조건 연출'
     expect(r.warnings.join(' ')).not.toContain('SetConditionalEvents');
     const ch = compileChart(r.level);
     expect(ch.visual.some((v) => v.action.type === 'MoveDecorations')).toBe(false);
-    expect(ch.cond.get('dead')?.length).toBe(1);
+    expect(ch.cond.get(condKey(1, 'dead'))?.length).toBe(1);
     expect(ch.tiles[1].conds).toEqual({ loss: 'dead' });
     // 실행: 부르기 전에는 숨은 채, 부르면 나타난다
     const tl = new VisualTimeline(ch);
     tl.update(ch.times[3]);
     expect(tl.decos[0].opacity).toBe(0);
-    tl.trigger('dead', ch.times[3]);
+    tl.trigger(1, 'dead', ch.times[3]);
     tl.update(ch.times[3] + 0.01);
     expect(tl.decos[0].opacity).toBe(1);
   });

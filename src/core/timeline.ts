@@ -1,4 +1,4 @@
-import type { Chart, TimedAction } from './chart';
+import { condKey, type Chart, type TimedAction } from './chart';
 import { lerpColor, parseColor } from './color';
 import { ease } from './ease';
 import { lerp } from './math';
@@ -62,6 +62,11 @@ export interface DecoState {
   /** 타일 도형의 꺾임 각도·아이콘 (원작 SetObject로 바뀜) */
   tileAngle: number;
   tileIcon: DecoTileIcon | null;
+  /** 타일 도형 스타일 (원작 SetObject trackStyle로 바뀜) */
+  tileStyle: 'standard' | 'neon' | 'neonlight' | 'minimal';
+  /** 기준 바꾸기 (MoveDecorations relativeTo) — null이면 장식 정의대로 */
+  rel: 'tile' | 'global' | 'camera' | 'red' | 'blue' | null;
+  relFloor: number;
   /** 입자: 방출 중인지, 방출 시작 시각 (초) */
   emitting: boolean;
   emitSince: number;
@@ -233,6 +238,9 @@ export class VisualTimeline {
       text: null,
       tileAngle: 180,
       tileIcon: null,
+      tileStyle: 'standard',
+      rel: null,
+      relFloor: 0,
       emitting: false,
       emitSince: 0,
       burst: 0,
@@ -310,7 +318,10 @@ export class VisualTimeline {
       d.depth = d.def.depth ?? -1;
       d.text = null;
       d.tileAngle = d.def.tileAngle ?? 180;
+      d.rel = null;
+      d.relFloor = d.def.floor ?? 0;
       d.tileIcon = d.def.tileIcon ?? null;
+      d.tileStyle = d.def.tileStyle ?? 'standard';
       d.emitting = !!d.def.particle?.autoPlay;
       d.emitSince = 0;
       d.burst = 0;
@@ -359,8 +370,8 @@ export class VisualTimeline {
   }
 
   /** 조건 연출 실행 (원작 SetConditionalEvents): 태그의 연출을 곡 시각 t0 기준으로 시작한다. */
-  trigger(tag: string, t0: number): void {
-    const list = this.chart.cond.get(tag);
+  trigger(floor: number, tag: string, t0: number): void {
+    const list = this.chart.cond.get(condKey(floor, tag));
     if (!list) return;
     for (const ev of list) this.pending.push({ action: ev.action, time: t0 + ev.time, duration: ev.duration });
     this.pending.sort((a, b) => a.time - b.time);
@@ -711,7 +722,12 @@ export class VisualTimeline {
           if (a.depth !== undefined) d.depth = a.depth;
           if (a.text !== undefined) d.text = a.text;
           if (a.tileAngle !== undefined) d.tileAngle = a.tileAngle;
+          if (a.relativeTo !== undefined && a.relativeTo !== 'last') {
+            d.rel = a.relativeTo;
+            if (a.relativeTo === 'tile') d.relFloor = a.floor;
+          }
           if (a.tileIcon !== undefined) d.tileIcon = a.tileIcon;
+          if (a.tileStyle !== undefined) d.tileStyle = a.tileStyle;
           if (a.particle === 'start') {
             d.emitting = true;
             d.emitSince = ev.time;
@@ -730,8 +746,10 @@ export class VisualTimeline {
             targets.forEach((d, j) => {
               const f = from[j];
               if (a.offset) {
-                d.ox = to(a.offset[0], f.ox, k);
-                d.oy = to(a.offset[1], f.oy, k);
+                // 지금 자리 기준(last)이면 이동량을 지금 위치에 더한다
+                const rel = a.relativeTo === 'last';
+                d.ox = to(a.offset[0] === null ? null : rel ? f.ox + a.offset[0] : a.offset[0], f.ox, k);
+                d.oy = to(a.offset[1] === null ? null : rel ? f.oy + a.offset[1] : a.offset[1], f.oy, k);
               }
               if (a.rotation !== undefined) d.rot = lerp(f.rot, a.rotation, k);
               if (a.scale) {

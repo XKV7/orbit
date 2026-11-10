@@ -74,7 +74,7 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - Hold 추가 바퀴 0 = 다음 타일까지 누르고 있다가 도착할 때 떼기 (`Hold.toNext`, 떼기가 다음 타일 판정).
 - AutoPlayTiles → `AutoPlay` (그 구간 타일은 게임이 진행, 정확도에 안 넣음). SetPlanetRotation → `PlanetEase` (공전 곡선, 박 불변, easeParts·Mirror). SetHoldSound는 무시.
 - AddObject: 타일 번호가 없으면 0번(빠뜨리면 통째로 사라짐). 트랙 스타일 Neon = 검은 속 + 색 테두리 (트랙 색으로 칠하면 큰 살구색 사각형이 됐다), Minimal/Basic = 단색, trackType Midspin = 짧은 뾰족한 모양. MoveDecorations `pivotOffset` → `pivot` (회전 중심 이동, 애니메이션).
-- **미드스핀(999) 위치**: 미드스핀 타일에서는 나아가지 않는다 — 다음 타일이 같은 자리 (#79). 근거: 원작 angleData[k] = k+1번 타일이 놓이는 방향, 999는 방향 없음 (AdofaiTweaks `angleData.Insert(floor.seqID - 1, …)`); 원작 맵 미드스핀은 대부분 앞뒤 같은 각도(…180, 999, 180, 999…)로 쓰이고, ofnr 3:18 녹화에서 행성이 고리를 그리며 계속 나아간다. 되돌아가는 규칙(#77, 그 전 전부)은 이런 줄을 제자리에서 접어 **모든 커스텀 맵**의 미드스핀 구간이 깨졌다. #74→#77 되돌림은 잘못된 판단 ('Phantigma 뒤틀림'은 앞 타일이 안 보이던 문제 #78로 보임). 위치 규칙은 **원작 녹화에서 행성 궤적**으로 확인할 것.
+- **미드스핀(999) 위치 (확정)**: 미드스핀 타일도 한 칸 나아가고(이전 방향의 반대), 다음 타일은 그 앞 타일 자리 (`tilePositions`에 미드스핀 예외 없음). 확정 근거: ofnr 8:20 '마법진'(미드스핀 뒤 14타일 묶음 17개)을 두 규칙으로 좌표를 그려 보면 이 규칙에서만 완벽한 대칭 눈꽃, Phantigma 길도 이 규칙에서 깔끔. '제자리' 규칙은 #74·#79에서 두 번 넣었다가 #77·#81에서 되돌림 — **다시 바꾸지 말 것**. 'a, 999, a' 줄은 원래 제자리에서 접히고, 맵이 PositionTrack 등으로 펼친다 (ofnr 3:18 확인). 사용자의 '미드스핀 맵 전부 깨짐' 보고(#77 직후)는 앞 타일이 안 보이던 문제(#78)였던 것으로 보인다.
 - PositionTrack → `TrackBase` (타일 원래 위치·기본 회전·크기·불투명도, MoveTrack은 이 값 기준). 이 타일만(justThisTile)이면 그 타일만, 아니면 위치는 뒤로 누적·나머지는 다음 변경까지 (ofnr 48~62번이 원작에서 끝까지 안 보이는 것으로 확인).
 - Hide → 타일 아이콘·판정 글자 숨김. 월드 장식 lockScale은 **레벨 시작 줌** 기준 (ofnr 돌 고리 크기 원작과 일치).
 - 장식·오브젝트 `relativeTo` RedPlanet/BluePlanet(GreenPlanet은 빨강으로) → `red`/`blue`: 그 행성을 따라다닌다 (#80, ofnr '시계' 장면 — 행성 덮개·두 번째 행성 쌍). 게임이 매 프레임 `deco.planetPos`를 넣는다.

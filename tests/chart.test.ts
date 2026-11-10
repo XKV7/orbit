@@ -63,9 +63,9 @@ describe('hitTime 계산', () => {
     const c = compileChart(level([0, 90, 270, 0], [{ floor: 2, type: 'Midspin' }]));
     expect(c.tiles[2].beats).toBe(0);
     expect(c.times[3]).toBe(c.times[2]);
-    // 미드스핀 타일에서는 나아가지 않는다: 다음 타일이 같은 자리 (원작 녹화: 미드스핀 줄에서 행성이 고리를 그리며 계속 나아감)
-    expect(c.tiles[3].x).toBeCloseTo(c.tiles[2].x);
-    expect(c.tiles[3].y).toBeCloseTo(c.tiles[2].y);
+    // 미드스핀 타일도 한 칸 나아가고, 다음 타일은 그 앞 타일 자리 (원작 — ofnr 마법진·Phantigma로 확인)
+    expect(c.tiles[3].x).toBeCloseTo(c.tiles[1].x);
+    expect(c.tiles[3].y).toBeCloseTo(c.tiles[1].y);
     expect(c.tiles[3].start).toBe(90);
   });
   it('Pause는 박을 추가하고 목표 각도에 정확히 도착', () => {

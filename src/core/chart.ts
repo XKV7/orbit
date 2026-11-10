@@ -91,9 +91,10 @@ export const VISUAL_TYPES = new Set(['Camera', 'Flash', 'RecolorTrack', 'MoveTra
 /** 레벨을 컴파일해 모든 타일의 위치·박·시각을 미리 계산한다. */
 export function compileChart(level: LevelData): Chart {
   const { path, settings } = level;
-  // 원작 angleData[k]는 k+1번 타일이 놓이는 방향이고 999(미드스핀)는 방향이 없다 → 미드스핀 다음 타일은 같은 자리.
-  // (원작 맵의 미드스핀은 대부분 '앞뒤 같은 각도'(…, -89, 999, -88, 999, …)로 쓰여, 되돌아가는 규칙이면 제자리에서 접혔다)
-  const pos = tilePositions(path, TILE_LEN, new Set(level.actions.filter((a) => a.type === 'Midspin').map((a) => a.floor)));
+  // 미드스핀 타일도 한 칸 나아가고(이전 방향의 반대), 다음 타일은 그 앞 타일 자리 — 원작과 같다.
+  // 검증: ofnr 8:20 '마법진'(미드스핀 뒤 14타일 묶음 17개)이 이 규칙에서만 완벽한 대칭 눈꽃이 되고, Phantigma 길도 이 규칙에서 깔끔하다.
+  // ('제자리' 규칙 #74·#79는 두 맵 모두 어긋나게 해 되돌렸다 — #81)
+  const pos = tilePositions(path, TILE_LEN);
   const n = path.length + 1;
   const byFloor: Action[][] = Array.from({ length: n }, () => []);
   for (const a of level.actions) if (a.floor >= 0 && a.floor < n) byFloor[a.floor].push(a);
@@ -241,8 +242,10 @@ export function compileChart(level: LevelData): Chart {
     const t = tiles[a.floor];
     const beats = 'duration' in a && typeof a.duration === 'number' ? a.duration : 0;
     if (a.cond) {
-      let list = cond.get(a.cond);
-      if (!list) cond.set(a.cond, (list = []));
+      // 같은 타일의 조건만 이 연출을 부른다 (다른 타일에 같은 태그가 있어도 섞이지 않게 — ofnr 시계: 10604의 rj가 10828의 행성 키우기까지 불렀다)
+      const key = condKey(a.floor, a.cond);
+      let list = cond.get(key);
+      if (!list) cond.set(key, (list = []));
       list.push({ action: a, time: ((a.delay ?? 0) * 60) / t.bpm, duration: (beats * 60) / t.bpm });
       continue;
     }
@@ -308,4 +311,9 @@ export function beatMs(tile: ChartTile, pitch: number): number {
 export function resumeTime(chart: Chart, floor: number, beats = 2): number {
   const prev = chart.tiles[Math.max(0, floor - 1)];
   return chart.tiles[floor].time - (beats * 60) / prev.bpm;
+}
+
+/** 조건 연출 찾기 키: 타일 번호 + 태그 */
+export function condKey(floor: number, tag: string): string {
+  return `${floor}|${tag}`;
 }
