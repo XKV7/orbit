@@ -834,6 +834,7 @@ export class Game {
       quality: stage.qualityLevel,
       decos: vis(this.deco.behind) + vis(this.deco.front),
       tiles: this.track.visibleCount,
+      tileIds: (window as unknown as { __orbitTileIds?: boolean }).__orbitTileIds ? [...this.track.visibleSet] : undefined,
       texMB: Math.round(this.deco.textureMB),
       frameMs: +this.frameCpu.toFixed(2),
       renderMs: +stage.renderMs.toFixed(2),

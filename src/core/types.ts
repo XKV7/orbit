@@ -276,6 +276,11 @@ export interface MoveDecorationsAction extends ActionBase {
 export interface PlanetsAction extends ActionBase {
   type: 'Planets';
   radius?: number;
+  /**
+   * 반지름이 다음 타일까지의 간격도 정한다 (원작 ScaleRadius — 행성이 타일에 내려앉도록 타일 간격이 반지름을 따른다).
+   * 이 타일에서 다음 타일까지부터 적용. 없으면 행성 공전만 바뀐다.
+   */
+  spacing?: boolean;
   size?: number;
   duration?: number;
   ease?: EaseName;

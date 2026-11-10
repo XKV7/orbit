@@ -1,7 +1,7 @@
 import { Container, Graphics, Rectangle, RenderTexture, Sprite, Text, Texture, TilingSprite, type Matrix, type Renderer } from 'pixi.js';
 import 'pixi.js/advanced-blend-modes';
 import type { Chart } from '../core/chart';
-import { lerpColor, parseColor } from '../core/color';
+import { lerpColor, parseColor, scaleColor } from '../core/color';
 import { degToRad, TILE_LEN } from '../core/math';
 import type { DecoState, VisualTimeline } from '../core/timeline';
 import type { ParticleDef } from '../core/types';
@@ -602,7 +602,10 @@ export class DecorationView {
       }
       node.position.set(x, y);
       node.rotation = r;
-      node.alpha = isMask ? 1 : d.opacity * d.calpha;
+      const opa = d.opacity * d.calpha;
+      node.alpha = isMask ? 1 : Math.min(1, opa);
+      // 100% 초과: 검은 바탕 위에 색을 그만큼 곱한 것처럼 하얗게 (원작 불투명도 1200% 등)
+      const col = opa > 1 && !isMask ? scaleColor(d.color, opa) : d.color;
       if (o.ps) {
         // 입자 묶음: 색은 입자마다, 크기 배율은 장식 크기
         node.scale.set(sx, sy);
@@ -614,9 +617,9 @@ export class DecorationView {
         continue;
       }
       if (o.tile) {
-        o.tile.body.tint = d.color;
+        o.tile.body.tint = col;
         this.shapeTile(o, d);
-      } else if (node instanceof Sprite || node instanceof TilingSprite || node instanceof Text || node instanceof Graphics) node.tint = d.color;
+      } else if (node instanceof Sprite || node instanceof TilingSprite || node instanceof Text || node instanceof Graphics) node.tint = col;
       if (node instanceof Sprite || node instanceof TilingSprite) {
         const f = this.texFactor.get(node.texture) ?? 1;
         const tw = (node.texture.width || 1) * f;

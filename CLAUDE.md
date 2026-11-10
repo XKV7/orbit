@@ -31,7 +31,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 189개 통과)
+npx vitest run         # 테스트 (현재 193개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -80,6 +80,12 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - 장식·오브젝트 `relativeTo` RedPlanet/BluePlanet(GreenPlanet은 빨강으로) → `red`/`blue`: 그 행성을 따라다닌다 (#80, ofnr '시계' 장면 — 행성 덮개·두 번째 행성 쌍). 게임이 매 프레임 `deco.planetPos`를 넣는다.
 - AddObject 타일 모양: 원작 `trackAngle`(180 곧게·90 직각·360 끝 막음)·`trackIcon`(토끼·달팽이·소용돌이·체크포인트)을 진짜 타일과 같은 모양 함수로 그린다 (`tileAngle`·`tileIcon`, SetObject로 바뀜). 예전엔 곧은 직사각형을 돌려 흉내 — '그냥 직사각형'. 검증: 원작 길 복사 오브젝트(ofnr rzbA)는 회전 = a[f-1], trackAngle = 180 − (a[f] − a[f-1]) — 이 공식으로 그리면 진짜 길과 똑같이 겹친다.
 - 이벤트 지연(angleOffset)은 **이벤트 타일의 BPM**으로 센다 (도중에 BPM이 바뀌어도). 검증: ofnr 7:2x 효과음 이벤트가 타일 시각과 0ms로 일치(누적 박이면 9~23ms 어긋남), 시계 흰 행성이 10604번 타일에서 걷기 시작·걸음 간격 = 회전 8박, Phantigma 32.67박 같은 소수 지연. #80의 누적 박 규칙은 #82에서 되돌림 — **다시 바꾸지 말 것**.
+- **ScaleRadius는 다음 타일까지의 간격도 바꾼다** (`Planets.spacing`, 타일 f→f+1 간격 = f에서의 반지름). 검증: ofnr 1:20 반지름 244% 고리·1:22 눈꽃이 원작처럼 띄엄띄엄, 제작자가 반지름 125%와 타일 크기 125%를 늘 짝지어 씀. ORBIT 자체 레벨의 Planets.radius(에디터)는 간격을 안 바꾼다.
+- RepeatEvents `Floor` 방식 = **다음 floorCount개 타일에서 한 번씩** (repetitions·interval은 Beat 방식 전용). ofnr 7:21 '지나간 타일 숨기기'(floorCount 9)로 확인.
+- 불투명도 100% 초과(MoveDecorations·MoveTrack, 최대 2000%) = 검은 바탕에 색을 그만큼 곱한 것처럼 하얗게 타오름 (ofnr 7:21 네온 묶음 1200%→100%).
+- MoveCamera position의 빈 축(null)은 그 축을 그대로 두고, 그 축의 진행 중인 이동도 계속된다 (ofnr 10582: y만 바꾸는 이벤트가 x 이동을 끊어 마법진이 치우쳤다).
+- 1% 미만의 BPM 변화에는 속도 아이콘을 그리지 않는다 (ofnr 1:20 고리).
+- 원작 녹화 배율 주의: 원작은 플레이어의 에디터 줌(userSizeMultiplier)이 플레이에도 적용되고, 사용자 녹화는 폰으로 유튜브를 찍어 파일마다 확대가 다르다 → 같은 녹화 안의 상대 크기로만 비교 (ofnr 7:2x는 우리 화면을 1.47배 키워 겹치면 맞음).
 - 원작 녹화 HUD 아래 숫자 줄은 판정 개수(너무 빠름·빠름·약간 빠름·완벽·약간 느림·느림·너무 느림·놓침…) — 원작은 **미드스핀도 판정 하나로 센다**. 이걸 더하면 ofnr 타이밍은 원작과 1초 안으로 일치.
 - 확장자 없는 장식 그림 이름('============= ACT 0' 같은 구분용)은 그림 없음. AddObject 타일도 8자리 색 알파·trackOpacity 반영.
 - 트랙 스타일 NeonLight는 별도 모양(밝은 속 + 흰 테두리).
