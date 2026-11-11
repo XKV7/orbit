@@ -846,7 +846,8 @@ export function convertAdofai(text: string): AdofaiResult {
       case 'Hold': {
         // 원작 Hold의 duration = 추가로 도는 바퀴 수 (1바퀴 = 2박)
         const laps = num(e.duration, 0);
-        if (floor >= last || midSet.has(floor)) bump(approx, 'Hold(미드스핀·마지막 타일)');
+        // 미드스핀 타일의 홀드도 일반 홀드처럼 (원작: 행성이 한 바퀴 돌며 홀드 길이만큼 나아간다 — ofnr 3:18 무지개 고리)
+        if (floor >= last) bump(approx, 'Hold(마지막 타일)');
         else {
           // 홀드 타일 길이: 0.6 × (2 × 바퀴 + 1) × 배율 — ofnr 1770(1바퀴·100%)·10116(0바퀴·500%)을 원작 녹화와 맞춘 값
           const mult = Math.max(0, num(e.distanceMultiplier, 100)) / 100;
