@@ -8,7 +8,7 @@
 ## 0. 처음 이어받을 때 (체크리스트)
 
 1. 사용자는 한국어로 말한다 → **답변은 한국어**. 커밋 메시지·PR 본문은 영어.
-2. 준비: `npm ci` → `npx vitest run` (197개 통과해야 정상) → `npm run build`.
+2. 준비: `npm ci` → `npx vitest run` (198개 통과해야 정상) → `npm run build`.
 3. `main`이 기준이다. 열린 PR이 있는지, 마지막 Firebase 배포가 성공했는지 본다 (2절).
 4. 8절의 **사용자 응답 대기** 항목 — 사용자가 캡처·파일을 보내면 그것부터 이어서 본다.
 5. 다른 계정이면:
@@ -52,7 +52,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 197개 통과)
+npx vitest run         # 테스트 (현재 198개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -107,6 +107,7 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 - AutoPlayTiles → `AutoPlay` (그 구간 타일은 게임이 진행, 정확도에 안 넣음). SetPlanetRotation → `PlanetEase` (공전 곡선, 박 불변, easeParts·Mirror). SetHoldSound는 무시.
 - AddObject: 타일 번호가 없으면 0번(빠뜨리면 통째로 사라짐). 트랙 스타일 Neon = 검은 속 + 색 테두리 (트랙 색으로 칠하면 큰 살구색 사각형이 됐다), Minimal/Basic = 단색, trackType Midspin = 짧은 뾰족한 모양. MoveDecorations `pivotOffset` → `pivot` (회전 중심 이동, 애니메이션).
 - **미드스핀(999) 위치 (확정)**: 미드스핀 타일도 한 칸 나아가고(이전 방향의 반대), 다음 타일은 그 앞 타일 자리 (`tilePositions`에 미드스핀 예외 없음). 확정 근거: ofnr 8:20 '마법진'(미드스핀 뒤 14타일 묶음 17개)을 두 규칙으로 좌표를 그려 보면 이 규칙에서만 완벽한 대칭 눈꽃, Phantigma 길도 이 규칙에서 깔끔. '제자리' 규칙은 #74·#79에서 두 번 넣었다가 #77·#81에서 되돌림 — **다시 바꾸지 말 것**. 'a, 999, a' 줄은 원래 제자리에서 접히고, 맵이 PositionTrack 등으로 펼친다 (ofnr 3:18 확인). 사용자의 '미드스핀 맵 전부 깨짐' 보고(#77 직후)는 앞 타일이 안 보이던 문제(#78)였던 것으로 보인다.
+- **아직 등장 전(AnimateTrack 등장 애니메이션 전)인 타일에 MoveTrack 불투명도가 걸리면 0에서 시작**해 목표값까지 서서히 나타난다 (`VisualTimeline.notYetShown`). 이미 보이는 타일은 지금 값에서 시작. 근거: Cardboard(The Limit Does Not Exist) 마지막 마법진 — 다음 마법진(128타일)을 96~128박 동안 20~25%로 옮기는데, 100%에서 시작하면 같은 자리에 마법진이 두 개 겹쳐 '이미 친 마법진이 남은' 것처럼 보였다(사용자 보고). ofnr 10446(다음 136타일 8박 동안 100%)도 이 규칙이면 튀어나오지 않고 서서히 나타남.
 - PositionTrack → `TrackBase` (타일 원래 위치·기본 회전·크기·불투명도, MoveTrack은 이 값 기준). 이 타일만(justThisTile)이면 그 타일만, 아니면 위치는 뒤로 누적·나머지는 다음 변경까지 (ofnr 48~62번이 원작에서 끝까지 안 보이는 것으로 확인).
 - Hide → 타일 아이콘·판정 글자 숨김. 월드 장식 lockScale은 **레벨 시작 줌** 기준 (ofnr 돌 고리 크기 원작과 일치).
 - 장식·오브젝트 `relativeTo` RedPlanet/BluePlanet(GreenPlanet은 빨강으로) → `red`/`blue`: 그 행성을 따라다닌다 (#80, ofnr '시계' 장면 — 행성 덮개·두 번째 행성 쌍). 게임이 매 프레임 `deco.planetPos`를 넣는다.
@@ -158,7 +159,8 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 
 ## 7. 제작 과정 (PR 요약, 최근 → 과거)
 
-**원작 레벨 재현 · 원작 규칙 (#71~#90)**
+**원작 레벨 재현 · 원작 규칙 (#71~#92)**
+- #92 등장 전 타일의 불투명도 이동은 0에서 시작 (Cardboard 마지막 마법진에 지난 마법진처럼 보이던 겹침)
 - #91 이 인계 문서 전면 갱신 + `scripts/` 시험 도구(한 파일 빌드·스크린샷·성능·메모리)
 - #90 태블릿 성능: 격자 타일 찾기, PixiJS 8.21→8.23, 고주사율 60fps 고정, 설정 '프레임 표시' (화면 모습 그대로, CPU 4배 느리게 계산 시간 30~50% ↓)
 - #89 멀티프레스 (같은 프레임 여러 키, 멀티프레스 게이지), #88 과부하 (원작 실패 게이지, 이른 입력은 모두 너무 빠름)
@@ -182,7 +184,7 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 
 **그 이전**: 기본 게임(궤도 회전·판정·타일), 레벨 에디터(방향 패드·타임라인·파형), 곡에서 자동 생성, 동영상→mp3 변환, 온라인(Firebase 로그인·업로드·순위·동기화).
 
-**시험한 원작 레벨**: Hello (BPM) 2025/2026, Phantigma(AWC2026 결승 타이브레이커, 대회판·일반판), BIKE - Tanger, Plum - Timeline, R(원작 월드), Once Forgotten, Nothing Remains(AWC2026, 'ofnr', 13330타일, 10분 반, wav), Camellia - QuomodocunquizE(6450타일), 메가믹스(10분, 사용자가 잘 된다고 보고).
+**시험한 원작 레벨**: Hello (BPM) 2025/2026, Phantigma(AWC2026 결승 타이브레이커, 대회판·일반판), BIKE - Tanger, Plum - Timeline, R(원작 월드), Once Forgotten, Nothing Remains(AWC2026, 'ofnr', 13330타일, 10분 반, wav), Camellia - QuomodocunquizE(6450타일), Cardboard Box - The Limit Does Not Exist(1360타일, zip에 backup.adofai 같이 있음 — backup 아닌 쪽을 고름), 메가믹스(10분, 사용자가 잘 된다고 보고).
 
 ## 8. 현재 상황 / 남은 일 (2026-11 기준)
 

@@ -398,10 +398,13 @@ export class VisualTimeline {
     }
   }
 
-  /**
-   * 타일 i의 등장·퇴장 상태 (곡 시각 t). 설정이 없으면 null (항상 보임).
-   * beatsAhead 박 전부터 짧게 나타나고, 친 뒤 beatsBehind 박이 지나면 사라진다.
-   */
+  /** 시각 t에 타일 i가 아직 등장 애니메이션 전이라 안 보이는지 (MoveTrack이 불투명도를 정한 적 없을 때) */
+  private notYetShown(i: number, t: number): boolean {
+    const cfg = this.tileAnim[i];
+    if (!cfg || cfg.appear === 'none' || !Number.isNaN(this.tileOpSet[i])) return false;
+    return t < this.chart.tiles[i].time - cfg.ahead * cfg.aheadBeat;
+  }
+
   private addOffsetRange(lo: number, hi: number): void {
     const r = this.offsetRanges;
     for (let k = 0; k < r.length; k += 2) {
@@ -416,6 +419,10 @@ export class VisualTimeline {
     r.push(lo, hi);
   }
 
+  /**
+   * 타일 i의 등장·퇴장 상태 (곡 시각 t). 설정이 없으면 null (항상 보임).
+   * beatsAhead 박 전부터 짧게 나타나고, 친 뒤 beatsBehind 박이 지나면 사라진다.
+   */
   tileAnimAt(i: number, t: number): TileAnimResult | null {
     const cfg = this.tileAnim[i];
     if (!cfg) return null;
@@ -688,6 +695,8 @@ export class VisualTimeline {
           if (a.scale !== undefined) this.claimScale[i] = id;
           if (a.opacity !== undefined) {
             this.claimAlpha[i] = id;
+            // 아직 등장 전이라 안 보이던 타일은 0에서 서서히 나타난다 (원작: 다음 마법진이 20%까지 서서히 — Cardboard)
+            if (this.notYetShown(i, ev.time)) fa[i - lo] = 0;
             if (Number.isNaN(this.tileOpSet[i])) this.tileOpSet[i] = ev.time;
           }
         }
