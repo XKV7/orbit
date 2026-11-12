@@ -390,4 +390,22 @@ describe('원작 연출 타임라인', () => {
     expect(tl.decos[1].ox).toBe(0);
     expect(tl.decos[1].opacity).toBe(0.5);
   });
+
+  it('위치를 옮긴 트랙 구간을 기억한다 (화면 근처 타일 찾기용) — 합치고, 처음으로 되돌리면 지운다', () => {
+    const lv = emptyLevel();
+    lv.settings.bpm = 60;
+    lv.settings.offset = 0;
+    lv.path = new Array(20).fill(0);
+    lv.actions = [
+      { floor: 1, type: 'MoveTrack', from: 5, to: 7, offset: [10, 0], duration: 0 },
+      { floor: 2, type: 'MoveTrack', from: 8, to: 9, offset: [0, 10], duration: 0 },
+      { floor: 3, type: 'MoveTrack', from: 12, to: 14, opacity: 0, duration: 0 },
+    ];
+    const tl = new VisualTimeline(compileChart(lv));
+    tl.update(5);
+    // 5~7과 8~9는 맞닿아 하나로, 불투명도만 바꾼 12~14는 없음
+    expect(tl.offsetRanges).toEqual([5, 9]);
+    tl.update(0);
+    expect(tl.offsetRanges).toEqual([]);
+  });
 });

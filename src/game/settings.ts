@@ -22,6 +22,8 @@ export interface UserSettings {
   lockAspect: boolean;
   /** 트랙·행성 강조 (그림자 테두리, 진한 행성) — 복잡한 배경에서도 잘 보이게 */
   trackOutline: boolean;
+  /** 플레이 중 화면 구석에 초당 프레임·계산 시간 표시 (느린 장면 찾기) */
+  showFps: boolean;
 }
 
 const KEY = 'orbit.settings.v1';
@@ -51,6 +53,7 @@ export function defaultUserSettings(): UserSettings {
     fullscreen: true,
     lockAspect: true,
     trackOutline: true,
+    showFps: false,
   };
 }
 

@@ -31,7 +31,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 196개 통과)
+npx vitest run         # 테스트 (현재 197개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -155,4 +155,10 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
   - 측정: 스크래치의 mem2.mjs 같은 스크립트로 /proc의 크롬 렌더러 RSS를 0.3초마다 재며 불러오기·플레이.
   - **꺼짐 진단** (`src/diag.ts`): 무거운 단계(파일 읽기·zip 풀기·변환·음원 풀기·플레이 준비·플레이 처음 15초)마다 `localStorage orbit.lastStep`에 기록하고 끝나면 지운다. 탭이 꺼진 뒤 다시 열면 '지난번에 ○○ 단계에서 멈췄어요 (메모리·버전)' 창이 뜬다 — 사용자에게 캡처를 받아 원인 단계를 찾는다. `done(이름…)`은 그 단계일 때만 지운다 (미리듣기 디코딩이 플레이 단계 기록을 지우던 경쟁).
   - 사용자 보고: 메가믹스(10분, 압축 음원)는 잘 되고 ofnr(10분 반, wav)는 #75 뒤에도 '불러오고 튕김' — 진단 창 캡처 대기.
+- **성능 (태블릿)**: 화질을 안 바꾸는 엔진 개선을 먼저 함 (#90, 되돌릴 기준 = 브랜치 `backup/before-perf`).
+  - 타일 찾기: `TrackView`가 원래 자리를 8타일 칸 격자로 나눠 화면 근처 칸만 본다. MoveTrack 위치 오프셋을 받은 타일은 `VisualTimeline.offsetRanges`(구간 목록, reset 때 비움)로 따로 본다. 예전엔 매 프레임 전체 타일(ofnr 13330개)을 검사.
+  - 고주사율 화면: 계산+그리기가 화면 주기의 75%를 1.5초 넘기면 `ticker.maxFPS = 61` (`Stage.adaptRate`, `capped60`).
+  - 설정 '프레임 표시'(`showFps`): 왼쪽 아래에 fps·계산·그리기 ms·보이는 타일 수.
+  - 측정(CPU 4배 느리게, ofnr): 계산 8.8→5.4ms(1:20), 7.4→3.8ms(7:25), 8.9→6.2ms(8:20). 그리기 시간은 이 컨테이너가 소프트웨어 GPU라 비교 불가 — 실제 태블릿에서 '프레임 표시'로 볼 것. Pixi의 tint·alpha·visible 설정은 값이 같으면 이미 건너뛴다.
+  - 남은 후보: 터치 기기 해상도·안티앨리어싱, 필터 없을 때도 자동 화질, WebGPU(셰이더 3개 WGSL로), 그리기 Worker.
 - 네트워크: 이 클라우드 환경에서 `adofai.fandom.com`, `cloud.adofai.gg`는 막혀 있었다 (환경 설정에서 허용 필요). GitHub은 됨.

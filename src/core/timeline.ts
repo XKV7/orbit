@@ -168,6 +168,8 @@ export class VisualTimeline {
   readonly tileColor: Uint32Array;
   readonly tileOffX: Float32Array;
   readonly tileOffY: Float32Array;
+  /** MoveTrack 위치 오프셋을 받은 적 있는 타일 구간 [lo, hi, lo, hi, …] (렌더러가 원래 자리 밖 타일을 찾을 때) */
+  readonly offsetRanges: number[] = [];
   readonly tileRot: Float32Array;
   readonly tileAlpha: Float32Array;
   /**
@@ -336,6 +338,7 @@ export class VisualTimeline {
     this.tileColor.fill(this.baseTrack);
     this.tileOffX.fill(0);
     this.tileOffY.fill(0);
+    this.offsetRanges.length = 0;
     this.tileRot.fill(0);
     for (let i = 0; i < this.chart.tiles.length; i++) this.tileAlpha[i] = this.chart.tiles[i].baseAlpha;
     this.tileOpSet.fill(NaN);
@@ -399,6 +402,20 @@ export class VisualTimeline {
    * 타일 i의 등장·퇴장 상태 (곡 시각 t). 설정이 없으면 null (항상 보임).
    * beatsAhead 박 전부터 짧게 나타나고, 친 뒤 beatsBehind 박이 지나면 사라진다.
    */
+  private addOffsetRange(lo: number, hi: number): void {
+    const r = this.offsetRanges;
+    for (let k = 0; k < r.length; k += 2) {
+      // 겹치거나 맞닿은 구간은 합친다
+      if (lo <= r[k + 1] + 1 && hi >= r[k] - 1) {
+        lo = Math.min(lo, r[k]);
+        hi = Math.max(hi, r[k + 1]);
+        r.splice(k, 2);
+        k -= 2;
+      }
+    }
+    r.push(lo, hi);
+  }
+
   tileAnimAt(i: number, t: number): TileAnimResult | null {
     const cfg = this.tileAnim[i];
     if (!cfg) return null;
@@ -664,6 +681,7 @@ export class VisualTimeline {
         // 같은 타일·속성을 움직이던 앞 이벤트는 여기서 끊긴다 (지금 값에서 이어서)
         const id = ++this.moveSerial;
         const step = Math.max(1, Math.round((a.gap ?? 0) + 1));
+        if (a.offset) this.addOffsetRange(lo, hi);
         for (let i = lo; i <= hi; i += step) {
           if (a.offset) this.claimPos[i] = id;
           if (a.rotation !== undefined) this.claimRot[i] = id;

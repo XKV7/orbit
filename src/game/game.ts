@@ -352,6 +352,12 @@ export class Game {
     return (p.level.decorations?.length ?? 0) > 0;
   }
 
+  /** 프레임 표시용 한 줄 */
+  perfLine(): string {
+    const q = stage.qualityLevel;
+    return `${Math.round(stage.fps)} fps${stage.capped60 ? ' (60 고정)' : ''} · 계산 ${this.frameCpu.toFixed(1)}ms · 그리기 ${stage.renderMs.toFixed(1)}ms · 타일 ${this.track.visibleCount}${q ? ` · 화질 −${q}` : ''}`;
+  }
+
   diag(): string[] {
     const lv = this.chart.level;
     const decos = lv.decorations ?? [];
@@ -906,7 +912,10 @@ export class Game {
       renderMs: +stage.renderMs.toFixed(2),
     };
     // 느린 기기면 필터 해상도부터 자동으로 낮춘다 (진행 중일 때만 잰다)
-    if (this.state === 'playing') stage.adaptQuality(stage.app.ticker.deltaMS, worldFs.length + screenFs.length + backN > 0);
+    if (this.state === 'playing') {
+      stage.adaptQuality(stage.app.ticker.deltaMS, worldFs.length + screenFs.length + backN > 0);
+      stage.adaptRate(stage.app.ticker.deltaMS, this.frameCpu + stage.renderMs, now);
+    }
     this.screenFx.drawWeather(tl.filters, stage.width, stage.height, dt, reduce);
     const phase = beatPhaseAt(ch, tr);
     const frac = phase - Math.floor(phase);

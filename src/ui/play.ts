@@ -106,6 +106,18 @@ export class PlayScreen implements Screen, GameHud {
       onClear: (r) => this.onClear(r),
       onQuit: () => void show(this.opts.back()),
     });
+    // 프레임 표시 (설정)
+    if (settings.showFps) {
+      const fb = h('div', { style: 'position:fixed;left:8px;bottom:34px;z-index:50;font:12px/1.3 monospace;color:#9f9;background:rgba(0,0,0,.6);padding:3px 7px;border-radius:5px;pointer-events:none' });
+      root.append(fb);
+      const iv = setInterval(() => {
+        if (!this.game || !fb.isConnected) {
+          clearInterval(iv);
+          return;
+        }
+        fb.textContent = this.game.perfLine();
+      }, 500);
+    }
     // 진단 표시: 주소에 ?debug
     if (/[?&]debug\b/.test(location.search)) {
       const box = h('div', { style: 'position:fixed;left:8px;bottom:40px;z-index:50;font:11px/1.4 monospace;color:#9f9;background:rgba(0,0,0,.7);padding:6px 8px;border-radius:6px;max-width:92vw;white-space:pre-wrap;pointer-events:none' });
