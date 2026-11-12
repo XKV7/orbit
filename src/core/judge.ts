@@ -119,19 +119,55 @@ export const JUDGE_WEIGHT: Record<Judgment, number> = {
 export const OVERLOAD_DAMAGE = 0.5;
 export const OVERLOAD_RECOVERY_PER_BEAT = 0.4;
 export const OVERLOAD_LIMIT = 1;
+/** 멀티프레스 게이지 (원작 scrFailBar.multipressCounter): +0.35, 1박마다 0.2 회복, 6박 동안 없으면 0으로 */
+export const MULTIPRESS_DAMAGE = 0.35;
+export const MULTIPRESS_RECOVERY_PER_BEAT = 0.2;
+export const MULTIPRESS_RESET_AFTER_BEATS = 6;
+/** 연속 멀티프레스가 이 횟수를 넘으면 그때부터 게이지가 찬다 (원작 consecMultipressCounter > 5) */
+export const MULTIPRESS_FREE = 5;
 export class OverloadTracker {
-  /** 지금 게이지 (0 ~) */
+  /** 지금 과부하 게이지 (0 ~) */
   value = 0;
+  /** 멀티프레스 게이지 */
+  multi = 0;
+  private multiQuiet = 0;
+  /** 연속 멀티프레스 수 (한 프레임에 한 키만 누르면 0) */
+  consecMulti = 0;
   /** 너무 빠름 한 번. 과부하면 true. */
   push(): boolean {
     this.value += OVERLOAD_DAMAGE;
     return this.value > OVERLOAD_LIMIT;
   }
+  /**
+   * 멀티프레스 한 번 (같은 프레임의 남는 키가 너무 빠름이 될 자리). 연속 MULTIPRESS_FREE번까지는 봐주고,
+   * 그 뒤로는 게이지가 찬다. 넘치면 true.
+   */
+  pushMulti(): boolean {
+    this.consecMulti++;
+    if (this.consecMulti <= MULTIPRESS_FREE) return false;
+    this.multi += MULTIPRESS_DAMAGE;
+    this.multiQuiet = 0;
+    return this.multi > OVERLOAD_LIMIT;
+  }
+  /** 한 프레임에 키를 하나만 눌렀다 — 연속 멀티프레스 끊김 */
+  single(): void {
+    this.consecMulti = 0;
+  }
   /** 박이 지나간 만큼 회복 */
   recover(beats: number): void {
-    if (beats > 0) this.value = Math.max(0, this.value - OVERLOAD_RECOVERY_PER_BEAT * beats);
+    if (!(beats > 0)) return;
+    this.value = Math.max(0, this.value - OVERLOAD_RECOVERY_PER_BEAT * beats);
+    this.multi = Math.max(0, this.multi - MULTIPRESS_RECOVERY_PER_BEAT * beats);
+    this.multiQuiet += beats;
+    if (this.multiQuiet > MULTIPRESS_RESET_AFTER_BEATS) {
+      this.multi = 0;
+      this.multiQuiet = 0;
+    }
   }
   reset(): void {
     this.value = 0;
+    this.multi = 0;
+    this.multiQuiet = 0;
+    this.consecMulti = 0;
   }
 }

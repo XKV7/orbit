@@ -31,7 +31,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 193개 통과)
+npx vitest run         # 테스트 (현재 196개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -61,7 +61,8 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - 절대정확도(X-Accuracy) = (완벽×100 + 약간×75 + 빠름/느림×40 + 너무 빠름×20 + 놓침×0) / 판정 수 × 0.9875^체크포인트 사용 횟수. 사용자의 원작 결과 화면 두 장(48.67%, 39.10%)과 정확히 일치.
 - 판정 타이밍은 출발 타일의 BPM×속도 기준.
 - **너무 빠름**: 판정 창보다 이른 입력은 얼마나 이르든 모두 너무 빠름 (원작 scrMisc.GetHitMargin이 TooEarly에서 시작).
-- **과부하** (`OverloadTracker`, 원작 scrFailBar.overloadCounter): 너무 빠름 한 번에 +0.5, 1박(지금 타일 BPM)마다 0.4 회복, 1을 **넘으면**(>) 실패 — 박 사이에 연달아 세 번이면 실패. 값 출처: 원작 DLL을 옮겨 적은 공개 시뮬레이터 [kineticnapier/DoMachinesDreamOfDeparture](https://github.com/kineticnapier/DoMachinesDreamOfDeparture) `src/dmdod/adofai/rules.py`. 같은 곳의 멀티프레스 게이지(+0.35, 1박 0.2 회복, 6박 뒤 초기화)는 무엇을 멀티프레스로 세는지 미확인이라 아직 안 넣음.
+- **과부하** (`OverloadTracker`, 원작 scrFailBar.overloadCounter): 너무 빠름 한 번에 +0.5, 1박(지금 타일 BPM)마다 0.4 회복, 1을 **넘으면**(>) 실패 — 박 사이에 연달아 세 번이면 실패. 값 출처: 원작 DLL을 옮겨 적은 공개 시뮬레이터 [kineticnapier/DoMachinesDreamOfDeparture](https://github.com/kineticnapier/DoMachinesDreamOfDeparture) `src/dmdod/adofai/rules.py`. 
+- **멀티프레스** (원작 입력 흐름: NoStopMod `InputFixerManager.cs`가 원작 Update를 옮겨 둔 것 + Overlayer `consecMultipressCounter > 5`): 한 프레임(우리: 한 번의 input.drain)에 들어온 누르기를 한 묶음으로 처리. 첫 키는 평소대로, 둘째부터는 다음 타일 판정 창 안이면 그대로 치고, 아니면 너무 빠름 대신 **멀티프레스**(과부하 없음). 한 프레임에 한 키만 누르면 연속 횟수 0. 연속 5번을 넘은 멀티프레스부터 멀티프레스 게이지 +0.35 (1박 0.2 회복, 6박 조용하면 0), 1을 넘으면 실패 '멀티프레스'. NoStopMod에서 홀드 각도 π(2×바퀴+1)도 확인 — 우리 홀드 길이 공식의 (2n+1)과 같음.
 
 ### 변환 규칙 (`src/levels/adofai.ts`)
 - 확장 필터(CameraFilterPack)는 **속성값으로 세기**를 정한다 (Blur_Movie 반경 0 = 꺼짐, PlanetMars/Sepia/GrayScale/Rain의 Fade, 등). 값 0으로 "끄는" 이벤트가 많다.
