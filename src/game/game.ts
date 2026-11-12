@@ -94,6 +94,8 @@ export class Game {
   private readonly sfx = new Sfx(this.eng);
   private readonly input = new InputCollector();
   private readonly overload = new OverloadTracker();
+  /** 과부하 게이지를 마지막으로 회복시킨 곡 시각 */
+  private overloadT = 0;
   private track!: TrackView;
   private planets!: PlanetsView;
   private fx!: FxView;
@@ -451,12 +453,11 @@ export class Game {
     // 자동 진행 구간 (원작 AutoPlayTiles): 누르기는 무시
     if (this.chart.tiles[this.cur].auto) return;
     const ti = this.judgeTime(ev.ts);
-    const tile = this.chart.tiles[this.cur];
     const target = this.chart.times[this.cur + 1];
     const e = ((ti - target) / this.pitch) * 1000;
     const w = this.windowsFor(this.cur);
-    const tooEarlyLimit = ((tile.duration / this.pitch) * 1000) / 2;
-    const j = judgeError(e, w, tooEarlyLimit);
+    // 원작: 판정 창보다 이른 입력은 얼마나 이르든 모두 '너무 빠름' (scrMisc.GetHitMargin은 TooEarly에서 시작)
+    const j = judgeError(e, w, Infinity);
     if (j === null) return;
     // 맵 규칙: 이 구간에서 금지된 판정이면 실패
     if (this.ruleAt[this.cur + 1]?.has(j)) {
@@ -472,7 +473,7 @@ export class Game {
       this.fireCond(this.cur, j, ti);
       this.stats.recordTooEarly(this.cur + 1);
       this.showJudge(this.cur + 1, j);
-      if (this.overload.push(ev.ts / 1000)) this.fail('overload');
+      if (this.overload.push()) this.fail('overload');
       return;
     }
     if (j === 'miss') {
@@ -790,6 +791,9 @@ export class Game {
     if (fpsQ > 0 && !settings.reduceEffects) tr = Math.floor(tr * fpsQ) / fpsQ;
     (window as unknown as { __orbitSongTime?: number }).__orbitSongTime = tr; // 자동 시험용 (화면 비교)
     this.timeline.update(tr);
+    // 과부하 게이지 회복: 지나간 박 수만큼 (원작: 그 타일 BPM 기준)
+    if (this.state === 'playing' && tr > this.overloadT) this.overload.recover(((tr - this.overloadT) * ch.tiles[Math.min(this.cur, ch.finish)].bpm) / 60);
+    this.overloadT = tr;
     const tl = this.timeline;
     const reduce = settings.reduceEffects;
     // 잔상(원작 HallOfMirrors)은 화면을 지우지 않는 것 — 배경 그림·영상이 있으면 원작도 매 프레임 그것이 화면을 다시 덮어

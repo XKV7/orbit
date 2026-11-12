@@ -80,29 +80,32 @@ describe('판정 경계값', () => {
   });
 });
 
-describe('과부하 실패', () => {
-  it('0.5초 안에 4회면 실패', () => {
+describe('과부하 실패 (원작 실패 게이지)', () => {
+  it('너무 빠름 한 번에 0.5, 1을 넘으면 실패 — 연달아 세 번째에 실패', () => {
     const o = new OverloadTracker();
-    expect(o.push(0)).toBe(false);
-    expect(o.push(0.1)).toBe(false);
-    expect(o.push(0.2)).toBe(false);
-    expect(o.push(0.49)).toBe(true);
+    expect(o.push()).toBe(false); // 0.5
+    expect(o.push()).toBe(false); // 1.0 (넘지 않음)
+    expect(o.push()).toBe(true); // 1.5
   });
-  it('0.5초를 넘기면 누적 초기화', () => {
+  it('1박에 0.4씩 회복', () => {
     const o = new OverloadTracker();
-    o.push(0);
-    o.push(0.1);
-    o.push(0.2);
-    expect(o.push(0.5)).toBe(false); // 0은 창 밖
-    expect(o.push(0.55)).toBe(true); // 0.1, 0.2, 0.5, 0.55
+    o.push();
+    o.push(); // 1.0
+    o.recover(1); // 0.6
+    expect(o.push()).toBe(true); // 1.1
+    const p = new OverloadTracker();
+    p.push();
+    p.push();
+    p.recover(2.5); // 0
+    expect(p.value).toBe(0);
+    expect(p.push()).toBe(false);
   });
   it('reset', () => {
     const o = new OverloadTracker();
-    o.push(0);
-    o.push(0);
-    o.push(0);
+    o.push();
+    o.push();
     o.reset();
-    expect(o.push(0)).toBe(false);
+    expect(o.push()).toBe(false);
   });
 });
 

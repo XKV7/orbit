@@ -63,7 +63,7 @@ export function adofaiWindows(beatMs: number, difficulty: JudgeDifficulty, mobil
 
 /**
  * 입력 오차 e (ms, 음수 = 빠름) 판정.
- * tooEarlyLimitMs: 이보다 더 이른 입력은 무시 (null).
+ * tooEarlyLimitMs: 이보다 더 이른 입력은 무시 (null). 원작은 판정 창보다 이른 입력이 모두 너무 빠름 → Infinity.
  */
 export function judgeError(e: number, w: Windows, tooEarlyLimitMs: number): Judgment | null {
   const a = Math.abs(e);
@@ -111,20 +111,27 @@ export const JUDGE_WEIGHT: Record<Judgment, number> = {
   miss: 0,
 };
 
-/** 과부하: windowSec 안에 limit회 이상 너무 빠름. */
+/**
+ * 과부하 게이지 (원작 실패 게이지 scrFailBar.overloadCounter): 너무 빠름 한 번에 +0.5,
+ * 1박(그 타일 BPM 기준)마다 0.4씩 줄고, 1을 **넘으면** 과부하로 실패.
+ * 값은 원작 DLL에서 옮겨 적은 공개 시뮬레이터(kineticnapier/DoMachinesDreamOfDeparture rules.py)의 상수.
+ */
+export const OVERLOAD_DAMAGE = 0.5;
+export const OVERLOAD_RECOVERY_PER_BEAT = 0.4;
+export const OVERLOAD_LIMIT = 1;
 export class OverloadTracker {
-  private stamps: number[] = [];
-  constructor(
-    private readonly limit = 4,
-    private readonly windowSec = 0.5,
-  ) {}
-  /** 너무 빠름 발생 시각(실제 초) 기록. 과부하면 true. */
-  push(t: number): boolean {
-    this.stamps.push(t);
-    this.stamps = this.stamps.filter((s) => t - s < this.windowSec);
-    return this.stamps.length >= this.limit;
+  /** 지금 게이지 (0 ~) */
+  value = 0;
+  /** 너무 빠름 한 번. 과부하면 true. */
+  push(): boolean {
+    this.value += OVERLOAD_DAMAGE;
+    return this.value > OVERLOAD_LIMIT;
+  }
+  /** 박이 지나간 만큼 회복 */
+  recover(beats: number): void {
+    if (beats > 0) this.value = Math.max(0, this.value - OVERLOAD_RECOVERY_PER_BEAT * beats);
   }
   reset(): void {
-    this.stamps = [];
+    this.value = 0;
   }
 }
