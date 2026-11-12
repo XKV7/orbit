@@ -109,6 +109,33 @@ describe('과부하 실패 (원작 실패 게이지)', () => {
   });
 });
 
+describe('멀티프레스 (원작 같은 프레임의 남는 키)', () => {
+  it('연속 5번까지는 봐주고, 그 뒤로 0.35씩 — 1을 넘으면 실패', () => {
+    const o = new OverloadTracker();
+    for (let i = 0; i < 5; i++) expect(o.pushMulti()).toBe(false);
+    expect(o.pushMulti()).toBe(false); // 0.35
+    expect(o.pushMulti()).toBe(false); // 0.70
+    expect(o.pushMulti()).toBe(true); // 1.05
+  });
+  it('한 프레임에 한 키만 누르면 연속 횟수가 끊긴다', () => {
+    const o = new OverloadTracker();
+    for (let i = 0; i < 5; i++) o.pushMulti();
+    o.single();
+    expect(o.pushMulti()).toBe(false);
+    expect(o.multi).toBe(0);
+  });
+  it('1박에 0.2 회복, 6박 동안 없으면 0', () => {
+    const o = new OverloadTracker();
+    for (let i = 0; i < 7; i++) o.pushMulti(); // 0.70
+    o.recover(1);
+    expect(o.multi).toBeCloseTo(0.5);
+    o.recover(1);
+    o.recover(4.5); // 조용한 6.5박
+    expect(o.multi).toBe(0);
+    expect(o.value).toBe(0);
+  });
+});
+
 describe('통계', () => {
   it('정확도와 체크포인트 재개', () => {
     const s = new PlayStats();

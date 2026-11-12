@@ -73,6 +73,7 @@ interface Hold {
 const FAIL_LABEL = {
   miss: '놓침',
   overload: '과부하 — 너무 빠르게 연타했습니다',
+  multipress: '멀티프레스 — 여러 키를 동시에 너무 자주 눌렀습니다',
   holdEarly: '홀드를 너무 일찍 뗐습니다',
   holdLate: '홀드를 너무 늦게 뗐습니다',
   rule: '이 구간은 그 판정이 나오면 실패예요 (맵 규칙)',
@@ -434,7 +435,8 @@ export class Game {
   /** 이번 프레임의 기기 오프셋 (ms) */
   private devOffset = 0;
 
-  private handleInput(ev: InputEvent): void {
+  /** extra: 같은 프레임의 둘째 이후 누르기 (원작 멀티프레스 후보) */
+  private handleInput(ev: InputEvent, extra = false): void {
     if (ev.kind === 'up') {
       this.held.delete(ev.id);
       if (this.state === 'playing' && this.hold && this.held.size === 0 && !this.autoAt(this.hold.floor)) {
@@ -468,6 +470,12 @@ export class Game {
       }
       // 무적 모드: 위반만 세고 판정은 그대로 이어 간다
       this.stats.ruleBreaks++;
+    }
+    if (j === 'tooEarly' && extra) {
+      // 원작 멀티프레스: 같은 프레임의 남는 키는 너무 빠름으로 치지 않는다 (연속으로 너무 자주면 멀티프레스 게이지)
+      this.stats.multipresses++;
+      if (this.overload.pushMulti()) this.fail('multipress');
+      return;
     }
     if (j === 'tooEarly') {
       this.fireCond(this.cur, j, ti);
@@ -638,9 +646,10 @@ export class Game {
         break;
       }
       case 'overload':
+      case 'multipress':
         this.stats.overloads++;
         this.overload.reset();
-        this.showJudgeText(this.cur + 1, '과부하', JUDGE_COLOR.tooEarly);
+        this.showJudgeText(this.cur + 1, reason === 'overload' ? '과부하' : '멀티프레스', JUDGE_COLOR.tooEarly);
         break;
       case 'holdEarly':
       case 'holdLate': {
@@ -728,7 +737,12 @@ export class Game {
     }
 
     // 입력 먼저 처리 (재시작 시 클럭이 바뀌므로 곡 시각은 그 뒤에 읽는다)
-    for (const ev of this.input.drain()) this.handleInput(ev);
+    // 원작처럼 한 프레임에 들어온 누르기를 한 묶음으로: 둘째부터는 남는 키(멀티프레스 후보)
+    const evs = this.input.drain();
+    const downs = evs.reduce((n, e) => n + (e.kind === 'down' ? 1 : 0), 0);
+    if (downs === 1) this.overload.single();
+    let nth = 0;
+    for (const ev of evs) this.handleInput(ev, ev.kind === 'down' && nth++ > 0);
 
     // 일시정지·재개 카운트다운 중에는 멈춘 시각 그대로 (카운트다운 동안 노래 시각은 뒤에서 다가온다)
     const t = this.state === 'paused' && this.pausedSong !== null ? this.pausedSong : this.eng.songTime(now);

@@ -20,6 +20,8 @@ export class PlayStats {
   fails = 0;
   /** 무적 모드에서 넘긴 실패: 과부하 · 맵 규칙 위반 · 홀드 실패 */
   overloads = 0;
+  /** 멀티프레스 (같은 프레임의 남는 키) 수 */
+  multipresses = 0;
   ruleBreaks = 0;
   holdFails = 0;
   private streak = 0;
@@ -58,6 +60,7 @@ export class PlayStats {
     this.checkpointUses = 0;
     this.fails = 0;
     this.overloads = 0;
+    this.multipresses = 0;
     this.ruleBreaks = 0;
     this.holdFails = 0;
     this.streak = 0;
