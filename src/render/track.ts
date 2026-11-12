@@ -55,7 +55,13 @@ export class TrackView {
   get visibleSet(): ReadonlySet<number> {
     return this.visible;
   }
+  private spare = new Set<number>();
   private pulses = new Map<number, number>();
+  // ── 화면 근처 타일 찾기: 원래 자리를 칸(GRID_CELL)으로 나눠 두고, MoveTrack으로 옮겨진 타일은 따로 본다 ──
+  private readonly grid = new Map<number, number[]>();
+  private readonly stamp: Uint32Array;
+  private stampNo = 0;
+  private readonly cand: number[] = [];
   private readonly editorMode: boolean;
   /** floor → 아이콘 종류 (객체는 화면에 들어올 때 생성). */
   private readonly iconKinds: IconKind[][];
@@ -70,6 +76,14 @@ export class TrackView {
     this.editorMode = !!opts.editor;
     this.outline = !!opts.outline;
     this.objs = new Array(chart.tiles.length);
+    this.stamp = new Uint32Array(chart.tiles.length);
+    for (let i = 0; i < chart.tiles.length; i++) {
+      const t = chart.tiles[i];
+      const k = cellKey(Math.floor(t.x / GRID_CELL), Math.floor(-t.y / GRID_CELL));
+      const list = this.grid.get(k);
+      if (list) list.push(i);
+      else this.grid.set(k, [i]);
+    }
     this.tileLayer.sortableChildren = true;
     this.container.addChild(this.tileLayer, this.selGfx, this.iconLayer, this.textLayer);
     this.iconKinds = Array.from({ length: chart.tiles.length }, () => []);
@@ -121,6 +135,51 @@ export class TrackView {
   }
   private py(i: number): number {
     return -(this.chart.tiles[i].y + (this.timeline ? this.timeline.tileOffY[i] : 0));
+  }
+
+  /** 화면 원 안에 있을 수 있는 타일 번호들 (정확한 거리 검사는 update에서). */
+  private candidates(view: ViewRect): number[] {
+    const out = this.cand;
+    out.length = 0;
+    const n = this.chart.tiles.length;
+    if (++this.stampNo === 0xffffffff) {
+      this.stamp.fill(0);
+      this.stampNo = 1;
+    }
+    const sn = this.stampNo;
+    const r = view.radius + TILE_LEN;
+    const x0 = Math.floor((view.cx - r) / GRID_CELL);
+    const x1 = Math.floor((view.cx + r) / GRID_CELL);
+    const y0 = Math.floor((view.cy - r) / GRID_CELL);
+    const y1 = Math.floor((view.cy + r) / GRID_CELL);
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > Math.max(64, this.grid.size)) {
+      // 아주 멀리 줌 아웃: 칸을 도는 것보다 전부 보는 게 빠르다
+      for (let i = 0; i < n; i++) out.push(i);
+      return out;
+    }
+    for (let gx = x0; gx <= x1; gx++) {
+      for (let gy = y0; gy <= y1; gy++) {
+        const list = this.grid.get(cellKey(gx, gy));
+        if (!list) continue;
+        for (let k = 0; k < list.length; k++) {
+          const i = list[k];
+          this.stamp[i] = sn;
+          out.push(i);
+        }
+      }
+    }
+    const rg = this.timeline?.offsetRanges;
+    if (rg) {
+      for (let k = 0; k < rg.length; k += 2) {
+        const hi = Math.min(n - 1, rg[k + 1]);
+        for (let i = Math.max(0, rg[k]); i <= hi; i++) {
+          if (this.stamp[i] === sn) continue;
+          this.stamp[i] = sn;
+          out.push(i);
+        }
+      }
+    }
+    return out;
   }
 
   pulseTile(i: number, now: number): void {
@@ -208,9 +267,13 @@ export class TrackView {
     const tiles = this.chart.tiles;
     const tl = this.timeline;
     const r2 = (u.view.radius + TILE_LEN) ** 2;
-    const nowVisible = new Set<number>();
+    // 지난 프레임의 집합을 재사용 (매 프레임 새로 만들면 메모리 정리로 끊긴다)
+    const nowVisible = this.spare;
+    nowVisible.clear();
     const bright = 1 + 0.18 * u.pulse;
-    for (let i = 0; i < tiles.length; i++) {
+    const cand = this.candidates(u.view);
+    for (let c = 0; c < cand.length; c++) {
+      const i = cand[c];
       const x = this.px(i);
       const y = this.py(i);
       const dx = x - u.view.cx;
@@ -312,6 +375,7 @@ export class TrackView {
         if (o) this.setVisible(o, false, false);
       }
     }
+    this.spare = this.visible;
     this.visible = nowVisible;
     this.visibleCount = nowVisible.size;
 
@@ -344,6 +408,12 @@ export class TrackView {
   destroy(): void {
     this.container.destroy({ children: true });
   }
+}
+
+/** 타일 찾기 칸 크기 (월드 단위, 타일 8칸) */
+const GRID_CELL = TILE_LEN * 8;
+function cellKey(gx: number, gy: number): number {
+  return (gx + 0x100000) * 0x200000 + (gy + 0x100000);
 }
 
 export function fmtBeats(b: number): string {

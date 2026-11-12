@@ -14,7 +14,7 @@
     "fflate": "^0.8.3",
     "firebase": "^12.19.0",
     "pixi-filters": "^6.1.5",
-    "pixi.js": "^8.21.0"
+    "pixi.js": "^8.23.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

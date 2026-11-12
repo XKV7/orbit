@@ -387,6 +387,38 @@ export class Stage {
     }
     console.info(`[ORBIT] 느려서 화질을 한 단계 낮춥니다 (단계 ${this.quality})`);
   }
+  // ── 고주사율(120Hz 등) 화면: 한 프레임 일이 화면 주기를 못 따라가면 60fps로 맞춘다 ──
+  // (판정은 입력 시각 기준이라 영향 없음. 들쭉날쭉한 8ms/16ms 섞임보다 고른 60fps가 덜 끊겨 보인다)
+  private refreshMs = 1000;
+  private workEma = 0;
+  private overMs = 0;
+  /** 60fps로 맞췄는지 */
+  capped60 = false;
+  /** 최근 초당 프레임 (표시용) */
+  fps = 0;
+  private fpsN = 0;
+  private fpsT = 0;
+  /** 매 프레임: 화면 갱신 간격(ms)과 이번 프레임 일(계산+그리기, ms). */
+  adaptRate(deltaMs: number, workMs: number, now: number): void {
+    this.fpsN++;
+    if (now - this.fpsT >= 500) {
+      if (this.fpsT > 0) this.fps = (this.fpsN * 1000) / (now - this.fpsT);
+      this.fpsT = now;
+      this.fpsN = 0;
+    }
+    if (deltaMs <= 0 || deltaMs > 250) return;
+    // 화면 주기 = 지금까지 본 가장 짧은 간격 (조금씩 잊어서 화면이 바뀌어도 따라감)
+    this.refreshMs = Math.max(4, Math.min(this.refreshMs + 0.002, deltaMs));
+    this.workEma += (workMs - this.workEma) * 0.05;
+    if (this.capped60 || this.refreshMs > 12) return;
+    if (this.workEma > this.refreshMs * 0.75) this.overMs += deltaMs;
+    else this.overMs = Math.max(0, this.overMs - deltaMs);
+    if (this.overMs > 1500) {
+      this.capped60 = true;
+      this.app.ticker.maxFPS = 61;
+      console.info('[ORBIT] 고주사율 화면을 따라가지 못해 60fps로 맞춥니다');
+    }
+  }
   get qualityLevel(): number {
     return this.quality;
   }
