@@ -104,6 +104,7 @@ uniform float uGlitch;
 uniform vec2 uTile;
 uniform vec2 uScroll;
 uniform vec4 uHole;
+uniform vec4 uShock;
 uniform float uDark;
 uniform float uSharp;
 uniform float uManga;
@@ -137,6 +138,20 @@ void main() {
     s = hp + (d * (1.0 - k / max(r * r, 1e-4) * 0.35)) / vec2(asp, 1.0);
     // 가운데는 살짝만 어둡게 (검은 원판은 원작에선 배경 그림 쪽)
     holeShade = mix(0.75, 1.0, smoothstep(rad * 0.3, rad * 0.7, r));
+  }
+  // 충격파 (원작 Distortion_ShockWave): 한 점에서 둥근 굴절 고리가 계속 퍼져 나간다
+  if (uShock.w > 0.0) {
+    float asp = uOutputFrame.z / uOutputFrame.w;
+    vec2 sp = vec2(uShock.x, 1.0 - uShock.y);
+    vec2 d = (s - sp) * vec2(asp, 1.0);
+    float r = length(d);
+    float ring = fract(uTime * uShock.z) * 1.4;
+    float x = r - ring;
+    float w = 0.07;
+    if (abs(x) < w) {
+      float a = 1.0 - abs(x) / w;
+      s -= (d / max(r, 1e-3)) * sin(x / w * 3.14159) * 0.025 * a * uShock.w / vec2(asp, 1.0);
+    }
   }
   // 출렁이는 기운 (원작 Vision_Aura): 가운데에서 퍼지는 물결 굴절
   if (uAura.x > 0.0) {
@@ -279,6 +294,7 @@ class DistortFilter extends Filter {
           uScroll: { value: new Float32Array([0, 0]), type: 'vec2<f32>' },
           uGlitch: { value: 0, type: 'f32' },
           uHole: { value: new Float32Array([0.5, 0.5, 0.3, 0]), type: 'vec4<f32>' },
+          uShock: { value: new Float32Array([0.5, 0.5, 1, 0]), type: 'vec4<f32>' },
           uDark: { value: 0, type: 'f32' },
           uSharp: { value: 0, type: 'f32' },
           uManga: { value: 0, type: 'f32' },
@@ -288,8 +304,8 @@ class DistortFilter extends Filter {
       },
     });
   }
-  get u(): Record<string, number> & { uBloomCol: Float32Array; uTile: Float32Array; uScroll: Float32Array; uHole: Float32Array; uAura: Float32Array } {
-    return (this.resources.fx as { uniforms: Record<string, number> & { uBloomCol: Float32Array; uTile: Float32Array; uScroll: Float32Array; uHole: Float32Array; uAura: Float32Array } }).uniforms;
+  get u(): Record<string, number> & { uBloomCol: Float32Array; uTile: Float32Array; uScroll: Float32Array; uHole: Float32Array; uShock: Float32Array; uAura: Float32Array } {
+    return (this.resources.fx as { uniforms: Record<string, number> & { uBloomCol: Float32Array; uTile: Float32Array; uScroll: Float32Array; uHole: Float32Array; uShock: Float32Array; uAura: Float32Array } }).uniforms;
   }
 }
 
@@ -513,7 +529,7 @@ export class ScreenFx {
     // 왜곡
     if (this.distort) {
       const u = this.distort.u;
-      const px = any('Pixelate', 'Compression', 'LED', 'PixelSnow') > 0 ? Math.max(k('Pixelate'), k('Compression') * 0.25, k('LED') * 0.8) : 0;
+      const px = any('Pixelate', 'Compression', 'LED', 'PixelSnow') > 0 ? Math.max(k('Pixelate'), k('Compression') * 0.25, k('LED') * 0.35) : 0;
       u.uPixel = px > 0 ? 2 + 5 * Math.min(3, px) : 0;
       u.uAberr = reduce ? 0 : Math.min(24, 3 * any('Aberration', 'VHS', 'EightiesTV', 'Handheld', 'Glitch') + (k('Aberration') > 0 ? 1 : 0));
       u.uScan = reduce ? 0 : Math.min(1, 0.4 * any('Arcade', 'VHS', 'EightiesTV', 'FiftiesTV', 'LED'));
@@ -528,6 +544,10 @@ export class ScreenFx {
       u.uHole[1] = k('HoleY');
       u.uHole[2] = Math.max(0.01, k('HoleSize'));
       u.uHole[3] = Math.min(3, k('Hole'));
+      u.uShock[0] = k('ShockX');
+      u.uShock[1] = k('ShockY');
+      u.uShock[2] = Math.max(0.1, k('ShockSpeed'));
+      u.uShock[3] = reduce ? 0 : Math.min(2, k('Shock'));
       u.uDark = Math.min(2, k('DarkMatter'));
       u.uSharp = Math.max(Math.min(4, k('SharpenX')), Math.min(1, k('Sharpen') * 0.5));
       u.uManga = reduce ? 0 : Math.min(1, k('MangaFlash'));
@@ -547,7 +567,7 @@ export class ScreenFx {
       u.uBloomCol[0] = ((bloom.color >> 16) & 255) / 255;
       u.uBloomCol[1] = ((bloom.color >> 8) & 255) / 255;
       u.uBloomCol[2] = (bloom.color & 255) / 255;
-      if (u.uPixel > 0 || u.uAberr > 0 || u.uScan > 0 || u.uFish > 0 || u.uPoster > 0 || u.uVig > 0 || u.uBloom > 0 || u.uWave > 0 || u.uGlitch > 0 || u.uHole[3] > 0 || u.uDark > 0 || u.uSharp > 0 || u.uManga > 0 || u.uAura[0] > 0 || u.uPlasma > 0 || tiled) out.push(this.distort);
+      if (u.uPixel > 0 || u.uAberr > 0 || u.uScan > 0 || u.uFish > 0 || u.uPoster > 0 || u.uVig > 0 || u.uBloom > 0 || u.uWave > 0 || u.uGlitch > 0 || u.uHole[3] > 0 || u.uShock[3] > 0 || u.uDark > 0 || u.uSharp > 0 || u.uManga > 0 || u.uAura[0] > 0 || u.uPlasma > 0 || tiled) out.push(this.distort);
     }
     return out;
   }

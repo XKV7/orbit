@@ -670,7 +670,9 @@ export class DecorationView {
     n = Math.min(n, max - ps.live.length);
     if (n > 0) {
       const tex = d.image ? this.texture(d.image) : null;
-      for (let j = 0; j < n; j++) this.spawn(ps, tex);
+      // 그림을 정했는데 아직 없거나(불러오는 중·파일 없음) 못 찾으면 내지 않는다
+      // (흰 사각형으로 대신 그리면 .adofai만 불러온 QuomodocunquizE에서 화면이 하얗게 덮였다)
+      if (!(d.image && !tex)) for (let j = 0; j < n; j++) this.spawn(ps, tex);
     }
     // 살아 있는 입자가 쓰는 그림은 내리지 않는다
     if (ps.live.length && d.image) this.lastUsed.set(d.image, performance.now());

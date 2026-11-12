@@ -22,6 +22,8 @@ export const FILTER_NAMES = [
   'ChanR', 'ChanG', 'ChanB',
   // 블랙홀 (원작 BlackHole): 세기 + 위치(화면 비율 0~1)·크기
   'Hole', 'HoleX', 'HoleY', 'HoleSize',
+  // 충격파 (원작 Distortion_ShockWave): 세기 + 위치(화면 비율 0~1)·초당 퍼지는 횟수
+  'Shock', 'ShockX', 'ShockY', 'ShockSpeed',
   // 암흑 물질 소용돌이 (원작 DarkMatter)
   'DarkMatter',
   // 대비 배율 (원작 Color_Contrast, 1 = 그대로 · 0 = 회색)

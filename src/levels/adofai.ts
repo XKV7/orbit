@@ -469,6 +469,32 @@ export function advancedFilter(name: string, p: Map<string, unknown>): AdvancedC
       return one('LetterboxH', Math.max(0, 1 - v('Size', 55) / 100));
     case 'TV_WideScreenVertical':
       return one('LetterboxV', Math.max(0, 1 - v('Size', 55) / 100));
+    case 'TV_WideScreenHV': {
+      // 위아래·좌우 모두 (QuomodocunquizE 237개)
+      const k = Math.max(0, 1 - v('Size', 55) / 100);
+      return { filters: [['LetterboxH', k], ['LetterboxV', k]] };
+    }
+    case 'Film_Grain':
+      // Value는 수천 단위 (4200, 6400) — 클수록 잡티가 짙다
+      return one('Grain', clamp01(v('Value', 3000) / 10000));
+    case 'TV_LED':
+      return one('LED', clamp01(v('Fade', 100) / 100));
+    case 'Noise_TV_2':
+    case 'Noise_TV_3':
+      // Fade 0 = 꺼짐 (끄는 대신 0으로 줄이는 이벤트가 많다)
+      return one('Static', clamp01(v('Fade', 10) / 100) * 0.8);
+    case 'TV_ARCADE':
+    case 'TV_ARCADE_2':
+      return one('Arcade', clamp01(v('Fade', 100) / 100));
+    case 'TV_80':
+      return one('EightiesTV', clamp01(v('Fade', 100) / 100));
+    case 'Blizzard':
+      return one('Blizzard', clamp01(v('_Fade', 100) / 100));
+    case 'FX_Plasma':
+      return one('Plasma', 0.5);
+    case 'Vision_Drost':
+      // 세기 0이면 아무 일 없음 (QuomodocunquizE)
+      return v('Intensity', 50) > 0 ? one('Waves', clamp01(v('Intensity', 50) / 100)) : { filters: [] };
     case 'TV_WideScreenCircle':
     case 'Vision_Tunnel':
       return one('Vignette', 1);
@@ -508,10 +534,14 @@ export function advancedFilter(name: string, p: Map<string, unknown>): AdvancedC
       const r = p.has('radius') ? Math.min(1, Math.abs(v('Radius', 100000)) / 100000) : 1;
       return one('Blur', 0.5 * r);
     }
+    case 'Blur_BlurHole': {
+      // 가운데 구멍 밖만 흐림, 세기 = AlphaBlur % (QuomodocunquizE: 27% — 화면 전체를 세게 흐리면 트랙이 뭉개졌다)
+      const amt = Math.max(v('_AlphaBlur', 100), v('_AlphaBlurInside', 0)) / 100;
+      return one('Blur', 0.5 * clamp01(amt));
+    }
     case 'Blur_Noise':
     case 'Blur_Radial':
     case 'Blur_Radial_Fast':
-    case 'Blur_BlurHole':
     case 'Blur_DitherOffset':
     case 'Blur_Focus':
     case 'Blur_GaussianBlur': {
@@ -547,6 +577,8 @@ export function advancedFilter(name: string, p: Map<string, unknown>): AdvancedC
     case 'Color_Noise':
     case 'Noise_TV':
     case 'TV_Noise':
+      // Fade가 있으면 그 세기 (Fade 1 = 거의 안 보임 — 0.6으로 켜면 화면이 회색 잡음으로 덮였다)
+      if (p.has('fade')) return one('Static', clamp01(v('Fade', 10) / 100) * 0.8);
       return one('Static', p.has('noise') ? Math.max(0.05, Math.min(0.6, Math.abs(v('Noise', 60)) / 100)) : 0.6);
     case 'Edge_Edge_filter':
       return one('EdgeBlackLine', 1);
@@ -585,6 +617,16 @@ export function advancedFilter(name: string, p: Map<string, unknown>): AdvancedC
           ['HoleY', Math.max(0, Math.min(1, v('PositionY', 50) / 100))],
           ['HoleSize', Math.max(0.01, Math.min(1, v('Size', 30) / 100))],
           ['Hole', Math.max(0.1, Math.min(3, v('Distortion', 3000) / 10000))],
+        ],
+      };
+    case 'Distortion_ShockWave':
+      // 위치에서 둥근 물결이 계속 퍼져 나간다 (QuomodocunquizE)
+      return {
+        filters: [
+          ['ShockX', Math.max(0, Math.min(1, v('PosX', 50) / 100))],
+          ['ShockY', Math.max(0, Math.min(1, v('PosY', 50) / 100))],
+          ['ShockSpeed', Math.max(0.1, Math.min(5, v('Speed', 130) / 200))],
+          ['Shock', 1],
         ],
       };
     case 'FX_DarkMatter':
@@ -971,7 +1013,9 @@ export function convertAdofai(text: string): AdofaiResult {
         break;
       }
       case 'SetFilter': {
-        const name = str(e.filter);
+        // 없는 원작 필터는 느낌이 가까운 것으로 (LightWater = 물결 굴절, OilPaint = 색 단계 줄이기)
+        const LEGACY_ALIAS: Record<string, string> = { LightWater: 'Waves', OilPaint: 'Posterize' };
+        const name = LEGACY_ALIAS[str(e.filter)] ?? str(e.filter);
         if (!name) break;
         if (!filterSet.has(name)) bump(skipped, `필터 ${name}`);
         const on = onOff(e.enabled);

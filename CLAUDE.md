@@ -93,7 +93,10 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - JSON에 쉼표가 빠진 .adofai도 읽는다 (선형 시간 관대한 파서).
 - zip 안에 .adofai가 여러 개면 묶인 그림을 가장 많이 쓰는 파일 → 이벤트 수 순으로 고른다 (에디터에서 바꿀 수 있음).
 
+- 확장 필터 추가 (QuomodocunquizE): TV_WideScreenHV(위아래+좌우), Film_Grain(Value/10000), TV_LED·TV_ARCADE(_2)·TV_80·Blizzard(Fade), Noise_TV/_2/_3(Fade — Fade 1은 거의 안 보임), Blur_BlurHole(AlphaBlur %), Distortion_ShockWave(새 셰이더 `Shock`: 위치에서 둥근 굴절 고리가 계속 퍼짐), FX_Plasma, Vision_Drost(세기 0 = 없음). 레거시 SetFilter LightWater → Waves, OilPaint → Posterize.
+
 ### 장식·화면 (`src/render/`)
+- 입자에 그림을 정했는데 그 그림이 없으면(.adofai만 불러옴·불러오는 중) 입자를 내지 않는다 — 흰 사각형으로 대신 그리면 화면이 하얗게 덮였다 (QuomodocunquizE).
 - 가림막(mask)은 **알파 채널**로 (빨강 채널이면 검게 칠한 가림막이 없어진 것처럼 돼 화면이 까매졌다 — BIKE).
 - parallaxOffset은 비율을 곱하지 않고 그대로 더한다. parallax 위치는 장식 자신의 자리 기준.
 - 장식 `tile`은 크기는 그대로 두고 그 안에 그림을 반복 (TilingSprite tileScale = 1/tile).
