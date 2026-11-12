@@ -36,6 +36,7 @@ export const ACTION_LABEL: Record<ActionType, string> = {
   Screen: '화면 반복·흐름·잔상',
   Sound: '소리',
   JudgeRule: '판정 규칙 (실패 조건)',
+  KeyLimit: '키 개수 제한',
   MultiPlanet: '행성 수 (2·3)',
   AutoPlay: '자동 진행 구간',
   PlanetEase: '행성 공전 곡선',
@@ -155,6 +156,12 @@ export const SCHEMA: Record<ActionType, Field[]> = {
   ],
   // 실패할 판정 목록은 원작 변환에서만 채운다 (에디터에서는 지우기만)
   JudgeRule: [],
+  KeyLimit: [
+    { k: 'limit', label: '쓸 수 있는 키 개수 (0=제한 없음)', kind: 'int' },
+    { k: 'exceed', label: '넘는 키 (무시·실패·연출)', kind: 'choice', options: ['ignore', 'fail', 'event'] },
+    { k: 'tag', label: '연출 태그 (event일 때)', kind: 'text', optional: true },
+    { k: 'once', label: '초과 이벤트 한 번만', kind: 'bool', optional: true },
+  ],
   MultiPlanet: [{ k: 'planets', label: '행성 수 (2 또는 3)', kind: 'int' }],
   AutoPlay: [{ k: 'enabled', label: '자동 진행', kind: 'bool' }],
   // 조건 목록은 원작 변환에서만 채운다
@@ -222,6 +229,8 @@ export function defaultAction(type: ActionType, floor: number, finish: number): 
       return { floor, type, play: 'Clap', volume: 1 };
     case 'JudgeRule':
       return { floor, type, fail: ['tooEarly', 'early', 'late'] };
+    case 'KeyLimit':
+      return { floor, type, limit: 2, exceed: 'ignore' };
     case 'MultiPlanet':
       return { floor, type, planets: 3 };
     case 'AutoPlay':

@@ -58,6 +58,7 @@ export const ACTION_TYPES: ActionType[] = [
   'Screen',
   'Sound',
   'JudgeRule',
+  'KeyLimit',
   'MultiPlanet',
   'AutoPlay',
   'PlanetEase',
@@ -369,6 +370,11 @@ function validateActionParams(a: Record<string, unknown>, type: ActionType, tile
       return null;
     case 'MultiPlanet':
       return a.planets === 2 || a.planets === 3 ? null : 'planets는 2 또는 3이어야 합니다.';
+    case 'KeyLimit':
+      if (!['ignore', 'fail', 'event'].includes(a.exceed as string)) return "exceed는 'ignore', 'fail', 'event' 중 하나여야 합니다.";
+      if (a.tag !== undefined && typeof a.tag !== 'string') return 'tag는 문자열이어야 합니다.';
+      if (a.once !== undefined && typeof a.once !== 'boolean') return 'once는 true/false여야 합니다.';
+      return isNum(a.limit) && a.limit >= 0 && a.limit <= 1000 ? null : 'limit은 0~1000 사이 숫자여야 합니다.';
     case 'JudgeRule': {
       const ok = ['tooEarly', 'early', 'late', 'earlyPerfect', 'latePerfect'];
       return Array.isArray(a.fail) && a.fail.every((x) => ok.includes(x as string)) ? null : `fail은 ${ok.join(', ')} 중 고른 목록이어야 합니다.`;

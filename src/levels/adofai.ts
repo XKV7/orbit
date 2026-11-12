@@ -846,6 +846,16 @@ export function convertAdofai(text: string): AdofaiResult {
         condTagsAt.get(f)!.add(t);
       }
   }
+  // 원작 KeyLimiter의 '초과 시 이벤트' 태그도 제자리에서 실행하지 않고 그때만 실행한다
+  for (const ev of list) {
+    const e = ev as Record<string, unknown>;
+    if (!e || str(e.eventType) !== 'KeyLimiter' || e.active === false) continue;
+    const f = Math.round(num(e.floor, -1));
+    for (const t of condTags(e.targetTag)) {
+      if (!condTagsAt.has(f)) condTagsAt.set(f, new Set());
+      condTagsAt.get(f)!.add(t);
+    }
+  }
   for (const ev of list) {
     if (typeof ev !== 'object' || ev === null) continue;
     const e = ev as Record<string, unknown>;
@@ -1204,6 +1214,18 @@ export function convertAdofai(text: string): AdofaiResult {
       case 'PlaySound':
         vis({ floor, type: 'Sound', play: str(e.hitsound) || 'Kick', volume: Math.max(0, Math.min(10, num(e.hitsoundVolume, 100) / 100)) });
         break;
+      case 'KeyLimiter': {
+        // 원작 KeyLimiter: 쓸 수 있는 키 개수 제한 (QuomodocunquizE: 16개, 넘으면 무시)
+        const tag = condTags(e.targetTag)[0];
+        const beh = str(e.exceedBehaviour).toLowerCase();
+        const exceed: 'ignore' | 'fail' | 'event' = /kill|fail|death|dead/.test(beh) ? 'fail' : /event|run/.test(beh) || (beh !== 'ignore' && tag) ? 'event' : 'ignore';
+        const on = onOff(e.enabled ?? true);
+        const a: Action = { floor, type: 'KeyLimit', limit: on ? Math.max(0, Math.min(1000, Math.round(num(e.limit, 0)))) : 0, exceed };
+        if (exceed === 'event' && tag) a.tag = tag;
+        if (str(e.runEventBehaviour).toLowerCase() === 'once') a.once = true;
+        actions.push(a);
+        break;
+      }
       case 'SetConditionalEvents': {
         // 판정별 연출 (죽는 히트박스용 태그는 아래 판정 규칙으로)
         const on: ConditionalAction['on'] = {};

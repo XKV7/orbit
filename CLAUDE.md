@@ -31,7 +31,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 192개 통과)
+npx vitest run         # 테스트 (현재 193개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -93,6 +93,7 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - JSON에 쉼표가 빠진 .adofai도 읽는다 (선형 시간 관대한 파서).
 - zip 안에 .adofai가 여러 개면 묶인 그림을 가장 많이 쓰는 파일 → 이벤트 수 순으로 고른다 (에디터에서 바꿀 수 있음).
 
+- KeyLimiter → `KeyLimit` (게임 규칙): 그 타일부터 처음 누른 limit개 키만 인정(터치·마우스는 한 키). exceedBehaviour Ignore = 무시, Kill 계열 = 실패('맵 키 제한'), 이벤트 = targetTag 조건 연출 실행(runEventBehaviour Once면 한 번). enabled false·limit 0 = 끄기. QuomodocunquizE는 16개·무시.
 - 확장 필터 추가 (QuomodocunquizE): TV_WideScreenHV(위아래+좌우), Film_Grain(Value/10000), TV_LED·TV_ARCADE(_2)·TV_80·Blizzard(Fade), Noise_TV/_2/_3(Fade — Fade 1은 거의 안 보임), Blur_BlurHole(AlphaBlur %), Distortion_ShockWave(새 셰이더 `Shock`: 위치에서 둥근 굴절 고리가 계속 퍼짐), FX_Plasma, Vision_Drost(세기 0 = 없음). 레거시 SetFilter LightWater → Waves, OilPaint → Posterize.
 
 ### 장식·화면 (`src/render/`)
