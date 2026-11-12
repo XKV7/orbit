@@ -408,4 +408,25 @@ describe('원작 연출 타임라인', () => {
     tl.update(0);
     expect(tl.offsetRanges).toEqual([]);
   });
+
+  it('아직 등장 전인 타일의 불투명도 이동은 0에서 시작한다 (원작 Cardboard: 다음 마법진이 20%까지 서서히)', () => {
+    const lv = emptyLevel();
+    lv.settings.bpm = 60;
+    lv.settings.offset = 0;
+    lv.path = new Array(20).fill(0);
+    lv.actions = [
+      { floor: 0, type: 'TrackAnim', appear: 'fade', beatsAhead: 0 },
+      // 1번 타일(1초)에서 10~12번(아직 안 보임)을 4박 동안 20%로
+      { floor: 1, type: 'MoveTrack', from: 10, to: 12, opacity: 0.2, duration: 4 },
+      // 이미 보이는 0~1번은 지금 값(100%)에서 시작
+      { floor: 1, type: 'MoveTrack', from: 0, to: 1, opacity: 0.2, duration: 4 },
+    ];
+    const tl = new VisualTimeline(compileChart(lv));
+    tl.update(3);
+    expect(tl.tileAlpha[10]).toBeCloseTo(0.1);
+    expect(tl.tileAnimAt(10, 3)!.alpha).toBe(1);
+    tl.update(1.5);
+    expect(tl.tileAlpha[1]).toBeCloseTo(0.9);
+  });
 });
+
