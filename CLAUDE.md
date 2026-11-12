@@ -1,30 +1,51 @@
 # CLAUDE.md — ORBIT 작업 인계 문서
 
-다른 계정·세션에서 이어서 작업할 수 있도록, 지금까지의 작업 방식·구조·배운 원작(ADOFAI) 동작·남은 일을 정리한 문서다.
-명세 결정은 `DECISIONS.md`, 사용 방법은 `README.md`, 음악 넣기는 `docs/음악_추가하기.md`에 있다.
+다른 계정·다른 세션의 Claude가 이 저장소를 이어받아 고칠 수 있도록 제작 과정, 현재 상황, 작업 방식, 알아낸 원작(ADOFAI) 동작, 남은 일을 정리한 문서다. **작업을 시작하기 전에 끝까지 읽을 것.**
+- 사용 방법: `README.md` · 음악 넣기: `docs/음악_추가하기.md` · 초기 명세 결정: `DECISIONS.md`
+- `DECISIONS.md`의 오래된 줄과 이 문서가 다르면 **이 문서(특히 5절)가 최신**이다.
+- 일을 끝낼 때마다 이 문서의 7절(한 일)·8절(현재 상황)을 갱신한다.
+
+## 0. 처음 이어받을 때 (체크리스트)
+
+1. 사용자는 한국어로 말한다 → **답변은 한국어**. 커밋 메시지·PR 본문은 영어.
+2. 준비: `npm ci` → `npx vitest run` (197개 통과해야 정상) → `npm run build`.
+3. `main`이 기준이다. 열린 PR이 있는지, 마지막 Firebase 배포가 성공했는지 본다 (2절).
+4. 8절의 **사용자 응답 대기** 항목 — 사용자가 캡처·파일을 보내면 그것부터 이어서 본다.
+5. 다른 계정이면:
+   - GitHub: 그 계정(또는 Claude GitHub 앱)이 `XKV7/orbit`에 쓰기 권한이 있어야 푸시·PR·머지가 된다.
+   - 아티팩트: 지금 아티팩트는 이전 계정 소유라 갱신할 수 없다 → `node scripts/single-file.mjs`로 빌드해 **새 비공개 아티팩트**를 만들고 링크를 사용자에게 알린다.
+   - Firebase 배포는 저장소 secret으로 돌아가므로 계정과 상관없이 `main` 머지만 하면 된다.
+6. 원작 레벨 파일·녹화는 저장소에 없다 (저작권). 필요하면 사용자에게 받아 저장소 밖 임시 폴더에 둔다.
 
 ## 1. 프로젝트
 
-- **ORBIT**: 얼음과 불의 춤(A Dance of Fire and Ice, ADOFAI)에서 영감을 받은 궤도 회전형 원버튼 리듬게임. TypeScript + PixiJS v8 + Vite, 테스트는 Vitest.
-- 저장소: `XKV7/orbit` (원래 이름 `XKV7/tester` — GitHub가 옛 이름도 넘겨준다. 일부 도구는 옛 이름 `tester`로만 접근되니 막히면 둘 다 시도).
+- **ORBIT**: 얼음과 불의 춤(A Dance of Fire and Ice, ADOFAI)에서 영감을 받은 궤도 회전형 원버튼 리듬게임. 자체 레벨·에디터·온라인 기능에 더해, **원작 `.adofai` 레벨(zip)을 불러와 원작처럼 플레이**하는 것이 지금 작업의 중심이다. TypeScript + PixiJS v8(8.23) + Vite, 테스트는 Vitest.
+- 저장소: `XKV7/orbit` (원래 이름 `XKV7/tester` — GitHub가 옛 이름도 넘겨준다. GitHub MCP 도구는 owner `XKV7`, repo `tester`로 불러야 했다. 막히면 둘 다 시도).
 - 배포
-  - **Firebase Hosting**: https://adofai-cb912.web.app — `main`에 머지되면 `.github/workflows/firebase-deploy.yml`이 자동 배포 (테스트 → 빌드 → 배포). 서비스 계정 키는 저장소 secret `FIREBASE_SERVICE_ACCOUNT`에만 있다. **키를 채팅·파일에 붙이지 말 것.**
-  - **claude.ai 아티팩트**(비공개): 한 파일 HTML 빌드를 올린다 (아래 6절). 아티팩트 링크는 이전 계정 소유라 다른 계정에서는 새 아티팩트를 만들어야 한다.
-- 사용자는 한국어로 대화한다. **답변은 한국어**로.
+  - **Firebase Hosting**: https://adofai-cb912.web.app — `main`에 머지되면 `.github/workflows/firebase-deploy.yml`이 자동 배포 (테스트 → 빌드 → 배포, 약 1분). 서비스 계정 키는 저장소 secret `FIREBASE_SERVICE_ACCOUNT`에만 있다. **키를 채팅·파일에 붙이지 말 것.**
+  - **claude.ai 아티팩트**(비공개): 한 파일 HTML 빌드(`scripts/single-file.mjs`)를 올린다. 이전 계정의 아티팩트: https://claude.ai/artifact/SSNFTGqx9upn62ionWgQNG (그 계정에서만 갱신 가능).
+- 백업: 큰 변경 전 상태는 브랜치로 남긴다 — `backup/before-perf` (#90 성능 작업 직전, eaad8ee). 사용자가 큰 변경 전에 백업을 원한 적이 있다.
 
 ## 2. 작업 규칙 (사용자가 정한 것)
 
-- 변경마다: `main` 최신을 받아 작업 브랜치를 다시 만들고 → 커밋 → 푸시 → PR → **머지(사용자가 머지·배포를 상시 허락함)** → Firebase 배포 성공 확인 → 아티팩트 갱신 → 한국어로 보고.
+- 변경마다: `main` 최신에서 작업 브랜치를 다시 만들고 → 테스트·빌드 → 커밋 → 푸시 → PR → **스쿼시 머지 (사용자가 머지·배포를 상시 허락함)** → Firebase 배포 성공 확인 → 아티팩트 갱신 → 한국어로 보고.
   ```bash
-  git fetch origin main && git checkout -B <작업 브랜치> origin/main   # (변경은 stash로 옮기기)
-  npx vitest run && npm run build
+  git fetch origin main && git checkout -B <작업 브랜치> origin/main   # (작업 중 변경은 stash로 옮기기)
+  npx tsc --noEmit -p . && npx vitest run && npm run build
   git push -u origin <작업 브랜치>
   ```
-- 커밋 메시지·PR 본문은 영어로 써 왔다. 끝에 그 세션이 정한 attribution 줄을 붙인다. **모델 이름·ID는 커밋·PR·코드에 넣지 않는다.**
+  - 작업 브랜치는 세션이 정해 준 이름을 쓴다 (이전 세션: `claude/sleepy-einstein-ic3c3h`). 스쿼시 머지 뒤 `main`에서 다시 만든 브랜치를 푸시하면 원격 브랜치와 갈라져 거절된다 → 강제 푸시 대신 `git merge -X ours --no-edit origin/<작업 브랜치>`로 원격 기록을 합친 뒤 푸시했다 (내용은 내 쪽 유지).
+  - 배포 확인: GitHub Actions의 'Deploy to Firebase' 실행(main, 최신 커밋)이 `success`인지 본다.
+- 커밋 메시지·PR 본문은 영어. 끝에 그 세션이 정한 attribution 줄을 붙인다. **모델 이름·ID는 커밋·PR·코드에 넣지 않는다.**
 - **저작권**: 원작 곡·영상·레벨 파일·그림은 저장소에 커밋하지 않는다 (비교·시험은 임시 폴더에서만). 원작의 그림·아이콘·소리·폰트를 베끼지 않는다. 사용자 대신 맵을 내려받아 배포하지 않는다.
-- 원작 내부 동작은 공개 모드 소스·위키·녹화 비교로 알아내고 **규칙과 숫자만** 우리 코드로 다시 짠다 (원작 코드 복사 금지). 사용자 PC(Steam+ADOFAI 설치)를 Remote Control로 연결하면 디컴파일러(dnSpy/ILSpy)로 `Assembly-CSharp.dll`을 볼 수 있다고 안내해 둠 — 약관 주의, 아직 연결된 적 없음.
-- 미리보기 서버를 끌 때 `pkill -f "vite preview"`를 쓰지 말 것 (다른 것까지 죽었다).
+- 원작 내부 동작은 공개 모드 소스·위키·녹화 비교로 알아내고 **규칙과 숫자만** 우리 코드로 다시 짠다 (원작 코드 복사 금지). 쓴 자료: Overlayer(qwru0905), NoStopMod(Luxusio/ADOFAI-NoStopMod), DoMachinesDreamOfDeparture(kineticnapier — 원작 DLL 상수를 옮긴 시뮬레이터), AdofaiTweaks. 사용자 PC(Steam+ADOFAI)를 Remote Control로 연결하면 디컴파일러로 `Assembly-CSharp.dll`을 볼 수 있다고 안내해 둠 — 약관 주의, 아직 연결된 적 없음.
+- 미리보기 서버를 끌 때 `pkill -f "vite preview"`를 쓰지 말 것 (다른 것까지 죽었다). 포트로 PID를 찾아 끈다: `ss -ltnp | grep :4175`.
 - 아티팩트는 비공개로 둔다.
+- 한 번 확정해 '다시 바꾸지 말 것'이라고 적힌 규칙(5절: 미드스핀 위치, 이벤트 지연 BPM)은 새 증거(원작 녹화 대조) 없이 바꾸지 않는다 — 두 번씩 뒤집었다가 되돌린 이력이 있다.
+
+### 보고 형식 (사용자에게)
+- 한국어, 짧게: 무엇을 바꿨는지(사용자 말로), 어떻게 확인했는지(테스트 수·브라우저·원작 녹화 대조), 한계·확인 못 한 것, PR 링크, 배포·아티팩트 링크.
+- 사용자에게 받아야 할 것(캡처·파일·녹화)이 있으면 마지막에 구체적으로 부탁한다.
 
 ## 3. 명령
 
@@ -35,21 +56,29 @@ npx vitest run         # 테스트 (현재 197개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
+
+# scripts/ — 시험 도구 (레벨 파일은 저장소 밖 경로로)
+node scripts/single-file.mjs [출력 폴더]                       # 아티팩트용 한 파일 HTML → dist-single/orbit.html
+node scripts/shot.mjs <레벨> <포트> <출력 접두사> <초>...       # 곡 시각마다 멈춰 스크린샷
+node scripts/perf.mjs <레벨> <초> [CPU 배율=4] [포트] [prof]   # 8초 동안 프레임 계산·그리기 ms
+node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내로 탭 메모리 최고치
 ```
 
 ## 4. 구조
 
 - `src/core/` — 게임 규칙 (DOM 없음, 단위 테스트 대상)
   - `types.ts` 레벨 형식(LevelData, Action 유니온), `level.ts` 검증(`validateLevel`, `FILTER_NAMES`, `ACTION_TYPES`)
-  - `chart.ts` 레벨 → 타일 위치·박·시각 (`compileChart`, `orbiterAngle`, MultiPlanet 3행성 −60° 처리)
-  - `timeline.ts` 연출 상태(`VisualTimeline`: 카메라·필터 `filters` 맵(배경 층은 `bg:` 접두사)·장식·타일 오프셋·트랙 애니메이션 `tileAnimAt`)
-  - `judge.ts` 판정 (`adofaiWindows` = 원작 각도 기준, `judgeError`, `OverloadTracker`), `stats.ts` 통계(정확도·**절대정확도 `xAccuracy`**·무적 모드 카운트)
-- `src/levels/` — `adofai.ts` 원작 `.adofai` → ORBIT 변환기(가장 큼), `package.ts` zip/폴더 패키지·파일 찾기·여러 .adofai 중 고르기, `library.ts`/`store.ts` 저장
-- `src/render/` — `stage.ts`(Pixi 앱, 레이어: backPlane[bg+backWorld] / worldWrap[world] / overlay, 필터 적용, 잔상, 화질 자동 조절), `track.ts`(타일, 스타일 orbit/standard/neon/basic/neonlight), `planets.ts`(행성 2·3개), `decorations.ts`(장식·입자·가림막·텍스처 메모리 예산), `screenfx.ts`(화면 필터 셰이더·빛 번짐)
-- `src/game/` — `game.ts`(게임 루프·판정·실패/무적 모드·결과), `input.ts`, `settings.ts`
-- `src/audio/` — 엔진·효과음·`device.ts`(오디오 기기별 오프셋, 출력 지연으로 기기 구분)
-- `src/ui/` — 화면들 (`select.ts` 레벨 선택: 자동 플레이·무적 모드 체크박스, `play.ts` 플레이·결과 화면, `calibrate.ts` 보정, `offsetUi.ts`, `settings.ts`)
-- `src/editor/` — 레벨 에디터 (도구 칸에 자동 플레이·무적 모드 플레이테스트)
+  - `chart.ts` 레벨 → 타일 위치·박·시각 (`compileChart`, `orbiterAngle`, MultiPlanet 3행성 −60°, 홀드 길이 `holdLen`/`holdEnd`, 조건 연출 키 `condKey`), `math.ts` (`tilePositions`, `TILE_LEN = 100`)
+  - `timeline.ts` 연출 상태(`VisualTimeline`: 카메라 축별 채널·필터 `filters` 맵(배경 층은 `bg:` 접두사)·장식·타일 오프셋(`offsetRanges`)·트랙 애니메이션 `tileAnimAt`·조건 연출 `trigger`)
+  - `judge.ts` 판정 (`adofaiWindows` = 원작 각도 기준, `judgeError`, `OverloadTracker` = 과부하·멀티프레스 게이지), `stats.ts` 통계(정확도·절대정확도 `xAccuracy`·무적 모드 카운트·멀티프레스 수)
+- `src/levels/` — `adofai.ts` 원작 `.adofai` → ORBIT 변환기(가장 큼, 원작 이벤트 대부분이 여기서 우리 액션으로 바뀜), `package.ts` zip/폴더 패키지·파일 찾기·여러 .adofai 중 고르기, `library.ts`/`store.ts` 저장
+- `src/render/` — `stage.ts`(Pixi 앱, 레이어: backPlane[bg+backWorld] / worldWrap[world] / overlay, 필터 적용, 잔상, 화질 자동 조절 `adaptQuality`, 고주사율 60fps 고정 `adaptRate`), `track.ts`(타일, 스타일 orbit/standard/neon/basic/neonlight, 격자로 화면 근처 타일만), `planets.ts`(행성 2·3개), `decorations.ts`(장식·입자·가림막·텍스처 메모리 예산), `screenfx.ts`(화면 필터 셰이더(GLSL)·빛 번짐·충격파), `shapes.ts`(타일 모양)
+- `src/game/` — `game.ts`(게임 루프·판정·실패/무적 모드·키 제한·과부하·멀티프레스·결과, `perfLine`/`diag`), `input.ts`(입력 이벤트 시각 그대로 보관), `settings.ts`
+- `src/audio/` — `engine.ts`(재생·디코딩 `decodeBytes`), 효과음, `wav.ts`(WAV 직접 읽기), `device.ts`(오디오 기기별 오프셋)
+- `src/ui/` — 화면들 (`select.ts` 레벨 선택: 자동 플레이·무적 모드, `play.ts` 플레이·결과 화면·프레임 표시, `calibrate.ts` 보정, `offsetUi.ts`, `settings.ts`)
+- `src/editor/` — 레벨 에디터 (`schema.ts` = 이벤트 입력 칸 정의 — 새 액션을 만들면 여기에도 넣어야 tsc가 통과)
+- `src/online/` — Firebase 로그인·업로드·순위·설정 동기화. `src/diag.ts` — 탭 꺼짐 진단.
+- `scripts/` — 시험·빌드 도구 (3절). `tests/` — Vitest.
 
 ## 5. 원작(ADOFAI) 동작 — 녹화 비교·자료로 확인한 것
 
@@ -113,52 +142,92 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 
 ## 6. 시험·비교 방법
 
-- 브라우저 자동 시험: Playwright (`/opt/node22/lib/node_modules/playwright`, Chromium은 `--use-gl=swiftshader --enable-unsafe-swiftshader`).
+- 브라우저 자동 시험: Playwright. 클라우드 컨테이너에는 전역 설치(`/opt/node22/lib/node_modules/playwright`)가 있고 `scripts/lib.mjs`가 찾아 쓴다. Chromium은 `--use-gl=swiftshader --enable-unsafe-swiftshader` (소프트웨어 GPU — **그리기 속도는 실제 기기와 다르다**).
 - 게임이 열어 둔 시험용 전역:
   - `window.__orbitFreezeAt = 초` → 그 곡 시각에서 화면 멈춤, `window.__orbitSongTime` 현재 곡 시각
-  - `window.__orbitStats` 이번 프레임 필터·보이는 타일·장식 수·CPU ms·장식 텍스처 MB
-  - `window.__orbitHide = new Set([그림 이름…])` 장식 숨기기 (어느 장식이 화면을 덮는지 찾기), `window.__orbitStage` 스테이지
-  - `window.__orbitStartAt = 초` → 플레이를 그 곡 시각의 타일부터 시작 (긴 곡을 처음부터 틀지 않고 원작 녹화와 비교). 스크래치 shot2.mjs: 시각마다 새 페이지 → 불러오기 → 자동 플레이 → StartAt=t-4, FreezeAt=t → 스크린샷.
-  - ofnr 원작 녹화 14개의 곡 시각: 영상 2초 지점 = 0:07, 0:52, 1:35, 2:22, 3:08, 3:53, 4:40, 5:22, 5:42, 6:25, 7:11, 7:55, 8:37, 9:25 (파일 이름 시각 순, 첫 Chrome 녹화 제외).
-- 흐름: 시작 → 레벨 불러오기(zip) → 경고 모달 확인 → `label:has-text("자동 플레이") input` 체크 → 플레이 → 시각마다 멈춰 스크린샷.
-- 원작 녹화와 맞추기: 녹화 HUD의 진행률(Progress %)이나 Perfect 카운터로 타일 → 곡 시각을 구해 같은 시각끼리 나란히 붙여 비교 (ffmpeg hstack/vstack).
+  - `window.__orbitStartAt = 초` → 플레이를 그 곡 시각의 타일부터 시작 (긴 곡을 처음부터 틀지 않고 비교)
+  - `window.__orbitStats` 이번 프레임 필터·보이는 타일·장식 수·`frameMs`(계산)·`renderMs`(그리기)·장식 텍스처 MB·화질 단계. `window.__orbitTileIds = true`면 보이는 타일 번호 목록도.
+  - `window.__orbitHide = new Set([그림 이름 또는 태그…])` 장식 숨기기 (어느 장식이 화면을 덮는지 찾기), `window.__orbitStage` 스테이지
+  - 주소에 `?debug` → 플레이 중 진단 상자. 설정 '프레임 표시' → fps·계산·그리기 ms.
+- 흐름 (`scripts/lib.mjs` `openAndPlay`): 시작 → 레벨 불러오기(zip) → 경고 모달 확인 → `label:has-text("자동 플레이") input` 체크 → StartAt/FreezeAt → 플레이.
+- 원작 녹화와 맞추기: 녹화 HUD의 진행률(Progress %)이나 판정 카운터로 타일 → 곡 시각을 구해 같은 시각끼리 나란히 붙여 비교 (ffmpeg hstack/vstack). 녹화마다 확대가 달라 상대 크기로만 비교 (5절).
+- ofnr 원작 녹화 14개의 곡 시각: 영상 2초 지점 = 0:07, 0:52, 1:35, 2:22, 3:08, 3:53, 4:40, 5:22, 5:42, 6:25, 7:11, 7:55, 8:37, 9:25.
+- 바꾸기 전·후 비교: `git worktree add <임시 폴더> origin/main` → 거기서 `npm ci && npm run build && npx vite preview --port 4176` → 같은 스크립트를 두 포트로 돌린다.
 - 원작 레벨·녹화는 저장소 밖 임시 폴더에만 두고 커밋하지 말 것.
-- 아티팩트 한 파일 빌드: vite를 `inlineDynamicImports`/`assetsInlineLimit` 크게/`cssCodeSplit:false`로 따로 빌드한 뒤 JS·CSS를 `index.html`에 넣는다. 문자열 치환은 **함수형 replace**로 (`$'` 같은 패턴이 JS에 있어 깨졌다), `</script`는 `<\/script`로. 크기 약 1.8MB.
+- 한 파일 빌드: `scripts/single-file.mjs` (vite `inlineDynamicImports`, `assetsInlineLimit` 크게, `cssCodeSplit:false` → JS·CSS를 `index.html`에 넣음). 문자열 치환은 **함수형 replace**로 (`$'` 같은 패턴이 JS에 있어 깨졌다), `</script`는 `<\/script`로. 크기 약 1.8MB.
 
-## 7. 지금까지 한 일 (PR 요약, 최근 → 과거)
+## 7. 제작 과정 (PR 요약, 최근 → 과거)
 
+**원작 레벨 재현 · 원작 규칙 (#71~#90)**
+- #91 이 인계 문서 전면 갱신 + `scripts/` 시험 도구(한 파일 빌드·스크린샷·성능·메모리)
+- #90 태블릿 성능: 격자 타일 찾기, PixiJS 8.21→8.23, 고주사율 60fps 고정, 설정 '프레임 표시' (화면 모습 그대로, CPU 4배 느리게 계산 시간 30~50% ↓)
+- #89 멀티프레스 (같은 프레임 여러 키, 멀티프레스 게이지), #88 과부하 (원작 실패 게이지, 이른 입력은 모두 너무 빠름)
+- #87 KeyLimiter (키 개수 제한), #86 QuomodocunquizE: 확장 필터·충격파 셰이더·그림 없는 입자
+- #85 미드스핀 위 홀드, #84 홀드 길이·미끄러지는 축 행성·홀드 막대
+- #83 ScaleRadius 간격·RepeatEvents Floor·100% 초과 불투명도·작은 BPM 변화 아이콘 생략
+- #82 이벤트 지연 = 이벤트 타일 BPM(#80 되돌림)·MoveCamera 축별, #81 타일별 조건 연출·SetObject 스타일·MoveDecorations relativeTo·미드스핀 규칙 확정·HUD 진행/정확도/절대 분리
+- #80 행성 따라가는 장식·오브젝트를 진짜 타일 모양으로, #79 미드스핀 제자리(→#81 되돌림)·예각 모서리 둥글게, #78 AnimateTrack 박 수를 그 이벤트 BPM으로, #77 미드스핀 되돌림
+- #76 탭 꺼짐 진단(`src/diag.ts`)·WAV 읽기 빠르게, #75 긴 곡 메모리 (낮은 표본율 디코딩, WAV 직접 읽기: 1.7GB→0.5GB)
+- #74 PositionTrack·긴 합성 비트 빠르게, #73 오브젝트 스타일·번호 없는 오브젝트, #72 조건 연출·0바퀴 홀드·AutoPlayTiles·SetPlanetRotation, #71 인계 문서 첫판
+
+**판정·보정·화면 (#41~#70)**
 - #70 판정 창을 원작 각도 기준으로 (예전 ms 고정 창은 보통 BPM에서 원작보다 약 2배 좁았음)
-- #69 보정 키보드 조작 (버튼 포커스 문제 해결, Enter 다음 단계, ←/→ 기기 오프셋, ↑/↓ 화면 미세, Shift 10ms, R 처음부터)
-- #68 에디터 플레이테스트 무적 모드 + 결과 화면, #67 절대정확도, #66 무적 모드(실패 없이 끝까지, 놓침·과부하·홀드·규칙 위반 집계)
-- #65 Plum - Timeline: 잔상·음수 angleOffset·화면 전체 빛 번짐
-- #64/#63 AnimateTrack 기본값 무시 (#63의 시작 BPM 기준은 되돌림)
+- #69 보정 키보드 조작, #68 에디터 플레이테스트 무적 모드 + 결과 화면, #67 절대정확도, #66 무적 모드
+- #65 Plum - Timeline: 잔상·음수 angleOffset·화면 전체 빛 번짐, #64/#63 AnimateTrack 기본값 무시
 - #62/#61 장식 그림 화면 크기 기준 로딩·메모리 예산·카메라 장식 줌·입자 크기 (Phantigma 실제 그림)
 - #60 MultiPlanet 3행성, #59 BIKE 검은 화면(가림막·산 장식·Sharpen), #58 Phantigma 확장 필터·배경 층 필터·NeonLight
 - #57 대회 판정 규칙, #56 가시성(트랙 외곽선·행성 강조), #55 쉼표 빠진 .adofai, #54 .adofai 고르기
 - #51~#52 보정 개편 (기기별 오프셋, 드럼 탭, 2단계 화면 맞추기), #48~#45 원작 16:9 화면 맞춤·회전·전체 화면
 - #49~#50/#23 Hello (BPM) 2025 지원·녹화 비교, #44/#36 폰 WebGL 끊김·텍스처, #41 화질 자동 조절
-- 그 이전: 에디터·자동 생성·온라인(Firebase 로그인·업로드·순위·동기화)·기본 게임
 
-시험한 원작 레벨: Hello (BPM) 2025/2026, Phantigma(AWC2026 결승 타이브레이커, 대회판·일반판), BIKE - Tanger, Plum - Timeline, R(원작 월드).
+**그 이전**: 기본 게임(궤도 회전·판정·타일), 레벨 에디터(방향 패드·타임라인·파형), 곡에서 자동 생성, 동영상→mp3 변환, 온라인(Firebase 로그인·업로드·순위·동기화).
 
-## 8. 남은 일 / 알려진 문제
+**시험한 원작 레벨**: Hello (BPM) 2025/2026, Phantigma(AWC2026 결승 타이브레이커, 대회판·일반판), BIKE - Tanger, Plum - Timeline, R(원작 월드), Once Forgotten, Nothing Remains(AWC2026, 'ofnr', 13330타일, 10분 반, wav), Camellia - QuomodocunquizE(6450타일), 메가믹스(10분, 사용자가 잘 된다고 보고).
 
+## 8. 현재 상황 / 남은 일 (2026-11 기준)
+
+### 사용자 응답 대기
+- **태블릿 프레임 측정**: #90 뒤 태블릿에서 설정 '프레임 표시'를 켜고 끊기는 장면의 숫자 캡처를 부탁함. 그리기 ms가 크면 → 다음 성능 단계(아래), 계산 ms가 크면 → 그 장면 프로파일링(`scripts/perf.mjs … prof`).
+- **태블릿 탭 꺼짐 (ofnr)**: 메가믹스(10분, 압축 음원)는 되고 ofnr(10분 반, wav)는 #75 뒤에도 '불러오고 튕김'. 다시 열면 뜨는 진단 창('지난번에 ○○ 단계에서 멈췄어요') 캡처 대기.
+- **보정 피드백**: 판정이 원작 기준(#70)으로 바뀌어 다시 보정해 보도록 안내함.
+- QuomodocunquizE: 사용자의 원작 녹화·zip(그림 포함)을 받으면 더 대조. 지금은 .adofai만 받음.
+
+### 성능 다음 단계 (#90에서 화질 그대로인 것만 함)
+- 터치 기기 렌더 해상도(지금 기기 배율 최대 2)·안티앨리어싱 끄기 — 보이는 차이 작고 GPU 부담 크게 ↓.
+- 자동 화질 조절이 **필터가 켜졌을 때만** 동작 (`stage.ts adaptQuality`) → 장식만 많은 장면도 낮추고, 빨라지면 다시 올리기.
+- '시각 효과' 설정 (전체 / 최소: 필터·잔상·입자 끔 / 없음: 장식도 끔).
+- 빛 번짐·흐림 절반 해상도, `useBackBuffer`는 섞기 모드 장식이 없는 레벨에서 끄기.
+- WebGPU 렌더러 (`screenfx.ts`의 GLSL 셰이더 3개를 WGSL로도), 그리기를 Worker(OffscreenCanvas)로 — 큰 작업.
+- 판정은 입력 이벤트 시각(`event.timeStamp`) 기준이라 프레임이 떨어져도 판정은 밀리지 않는다 — 성능 작업은 화면 부드러움 문제.
+
+### 알려진 문제
 - **타일 이동(MoveTrack) 중 공이 타일을 따라가는 시각적 오류** — 사용자가 보고. 공을 착지 위치에 고정하는 수정을 넣었다가 되돌림 (트랙 전체가 미끄러지는 연출은 원작도 공이 따라갈 수 있어 확신 없음). 어느 레벨·몇 초인지와 원작 녹화를 받아 비교한 뒤 고칠 것.
-- 배경(BGA): 레벨별로 남은 차이 — Phantigma 29초 근처 회색 장면, 152초 카메라 줌/위치, 145초 만화 집중선 과함, 전체 채도가 원작보다 낮음. Plum - Timeline은 구름 위치(카메라 구도), 타일 반투명도.
-- 미구현 원작 효과: 필터 LightWater, OilPaint(레거시 SetFilter), Vision 계열 일부, SetHitsound 게임 소리, 홀드 소리, MultiPlanet 4개 이상, FreeRoam. 조건 연출로 부른 PlaySound는 소리 안 남.
-- AWC2026 'Once Forgotten, Nothing Remains'(ofnr, 13330타일, 오브젝트 399개): 살구색 사각형(네온 미드스핀 오브젝트)·회색 돌 고리(번호 없는 오브젝트)는 고침. 예각으로 꺾인 타일 모서리는 둥글게(#79, 1:40 네온 고리 원작과 일치), 미드스핀 타일은 끝이 둥근 D자. 남은 차이 — 행성 색(원작 녹화는 흰색, 플레이어 설정일 수 있음). 원작 녹화는 사용자가 보낸 화면 녹화(HUD에 '음악 시간' 표시).
-- `window.__orbitHide`는 장식 태그로도 숨길 수 있다.
-- 판정이 바뀌었으니 사용자에게 다시 보정해 보도록 안내함 — 피드백 받기.
-- 긴 곡 성능·메모리 (ofnr 10분 반 곡, 태블릿에서 탭이 꺼짐):
-  - 음원 없을 때 합성 비트: 킥·하이햇 파형 재사용, 타일 찾기 선형, 5분 넘으면 16kHz → 불러오기 15초 → 1.4초.
-  - 음원 디코딩: `AudioEngine.decodeBytes(u8, 곡 길이)` — 디코딩 결과가 예산(폰 120MB / PC 400MB)을 넘으면 표본율을 낮춘다(최저 22.05kHz). WAV는 `src/audio/wav.ts`로 직접 읽어 복사 없이 바로 옮김 (브라우저 디코더는 원래 표본율로 다 푼 뒤 줄여 중간 메모리가 1GB를 넘었다). 그 밖의 형식은 OfflineAudioContext(낮은 표본율) 디코딩. 탭 메모리 최고치 1.7GB → 0.5GB (Playwright Pixel 7 흉내, 렌더러 RSS).
-  - 측정: 스크래치의 mem2.mjs 같은 스크립트로 /proc의 크롬 렌더러 RSS를 0.3초마다 재며 불러오기·플레이.
-  - **꺼짐 진단** (`src/diag.ts`): 무거운 단계(파일 읽기·zip 풀기·변환·음원 풀기·플레이 준비·플레이 처음 15초)마다 `localStorage orbit.lastStep`에 기록하고 끝나면 지운다. 탭이 꺼진 뒤 다시 열면 '지난번에 ○○ 단계에서 멈췄어요 (메모리·버전)' 창이 뜬다 — 사용자에게 캡처를 받아 원인 단계를 찾는다. `done(이름…)`은 그 단계일 때만 지운다 (미리듣기 디코딩이 플레이 단계 기록을 지우던 경쟁).
-  - 사용자 보고: 메가믹스(10분, 압축 음원)는 잘 되고 ofnr(10분 반, wav)는 #75 뒤에도 '불러오고 튕김' — 진단 창 캡처 대기.
-- **성능 (태블릿)**: 화질을 안 바꾸는 엔진 개선을 먼저 함 (#90, 되돌릴 기준 = 브랜치 `backup/before-perf`).
-  - 타일 찾기: `TrackView`가 원래 자리를 8타일 칸 격자로 나눠 화면 근처 칸만 본다. MoveTrack 위치 오프셋을 받은 타일은 `VisualTimeline.offsetRanges`(구간 목록, reset 때 비움)로 따로 본다. 예전엔 매 프레임 전체 타일(ofnr 13330개)을 검사.
-  - 고주사율 화면: 계산+그리기가 화면 주기의 75%를 1.5초 넘기면 `ticker.maxFPS = 61` (`Stage.adaptRate`, `capped60`).
-  - 설정 '프레임 표시'(`showFps`): 왼쪽 아래에 fps·계산·그리기 ms·보이는 타일 수.
-  - 측정(CPU 4배 느리게, ofnr): 계산 8.8→5.4ms(1:20), 7.4→3.8ms(7:25), 8.9→6.2ms(8:20). 그리기 시간은 이 컨테이너가 소프트웨어 GPU라 비교 불가 — 실제 태블릿에서 '프레임 표시'로 볼 것. Pixi의 tint·alpha·visible 설정은 값이 같으면 이미 건너뛴다.
-  - 남은 후보: 터치 기기 해상도·안티앨리어싱, 필터 없을 때도 자동 화질, WebGPU(셰이더 3개 WGSL로), 그리기 Worker.
-- 네트워크: 이 클라우드 환경에서 `adofai.fandom.com`, `cloud.adofai.gg`는 막혀 있었다 (환경 설정에서 허용 필요). GitHub은 됨.
+- 배경(BGA): Phantigma 29초 근처 회색 장면, 152초 카메라 줌/위치, 145초 만화 집중선 과함, 전체 채도가 원작보다 낮음. Plum - Timeline은 구름 위치(카메라 구도), 타일 반투명도.
+- ofnr: 행성 색(원작 녹화는 흰색, 플레이어 설정일 수 있음). 3:18 무지개 고리는 플레이어 설정 효과로 보여 구현 안 함.
+- QuomodocunquizE: 3:05 근처 회색은 맵의 11% 흰 번쩍임(의도된 것).
+
+### 미구현 원작 기능
+- 필터 SuperComputer(QuomodocunquizE에 한 번), Vision 계열 일부, 레거시 LightWater·OilPaint는 비슷한 효과로 대체(Waves·Posterize).
+- SetHitsound 게임 소리, 홀드 소리, 조건 연출로 부른 PlaySound의 소리, MultiPlanet 4개 이상, FreeRoam.
+
+### 긴 곡 메모리 (참고)
+- 음원 없을 때 합성 비트: 킥·하이햇 파형 재사용, 5분 넘으면 16kHz → 불러오기 15초 → 1.4초.
+- 음원 디코딩 `AudioEngine.decodeBytes(u8, 곡 길이)`: 디코딩 결과가 예산(폰 120MB / PC 400MB)을 넘으면 표본율을 낮춘다(최저 22.05kHz). WAV는 `src/audio/wav.ts`로 직접 읽음 (브라우저 디코더는 원래 표본율로 다 푼 뒤 줄여 중간 메모리가 1GB를 넘었다). 그 밖은 OfflineAudioContext(낮은 표본율).
+- 꺼짐 진단 (`src/diag.ts`): 무거운 단계마다 `localStorage orbit.lastStep`에 기록하고 끝나면 지운다. `done(이름…)`은 그 단계일 때만 지운다 (미리듣기 디코딩이 플레이 단계 기록을 지우던 경쟁).
+- 측정: `scripts/memory.mjs` (ofnr: 렌더러 최고 약 540MB, Pixel 7 흉내).
+
+## 9. 클라우드 환경에서 겪은 것 (도구 메모)
+
+- GitHub: `gh` CLI 없음 → GitHub MCP 도구(`mcp__github__*`) 사용. owner `XKV7`, repo `tester`. PR 만들기·스쿼시 머지·Actions 실행 목록 모두 이걸로 했다.
+- `git push`로 **태그는 거절**됐다(프록시가 끊음) → 백업은 MCP `create_branch`로 브랜치를 만들었다.
+- 네트워크: `adofai.fandom.com`, `cloud.adofai.gg`는 막혀 있었다 (환경 설정에서 허용 필요). GitHub·npm은 됨.
+- 긴 `sleep`은 막힘 → 배포를 기다릴 땐 Actions 실행 상태를 다시 조회하거나 until-루프.
+- 미리보기 서버는 `(nohup npx vite preview --port 4175 --strictPort > <로그> 2>&1 &)`로 띄운다. 컨테이너가 바뀌면 다시 띄워야 한다.
+- 컨테이너에 GPU가 없어 그리기 시간·GPU 메모리는 잴 수 없다 → 실제 기기 측정은 사용자에게 '프레임 표시'·진단 창 캡처를 부탁한다.
+- 시험용 임시 테스트 파일을 `tests/` 안에 두면 tsc가 깨진다 → 저장소 밖에 둔다.
+
+## 10. 사용자에 대해
+
+- 짧은 한국어로 요청한다 ("원작처럼 만들어줘", "나머지 고쳐줘"). 오타가 섞이기도 한다. 목표는 늘 **원작과 똑같이** — 원작 녹화와 대조한 근거를 보고에 넣으면 좋아한다.
+- 원작 레벨(zip/.adofai)과 폰으로 찍은 원작 녹화·캡처를 보내 준다. PC와 태블릿에서 플레이한다.
+- 머지·배포는 상시 허락. 큰 변경 전에는 백업을 남긴다.
