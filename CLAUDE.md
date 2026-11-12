@@ -60,6 +60,8 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - 아주 빠른 곡의 최소 시간: PC 완벽 25ms·약간 30ms·빠름/느림 91(느슨)/65(보통)/40(엄격)ms, 모바일 50/70/90ms. 연습 속도로 나눔. 터치 기기(`pointer: coarse`)는 모바일 값.
 - 절대정확도(X-Accuracy) = (완벽×100 + 약간×75 + 빠름/느림×40 + 너무 빠름×20 + 놓침×0) / 판정 수 × 0.9875^체크포인트 사용 횟수. 사용자의 원작 결과 화면 두 장(48.67%, 39.10%)과 정확히 일치.
 - 판정 타이밍은 출발 타일의 BPM×속도 기준.
+- **너무 빠름**: 판정 창보다 이른 입력은 얼마나 이르든 모두 너무 빠름 (원작 scrMisc.GetHitMargin이 TooEarly에서 시작).
+- **과부하** (`OverloadTracker`, 원작 scrFailBar.overloadCounter): 너무 빠름 한 번에 +0.5, 1박(지금 타일 BPM)마다 0.4 회복, 1을 **넘으면**(>) 실패 — 박 사이에 연달아 세 번이면 실패. 값 출처: 원작 DLL을 옮겨 적은 공개 시뮬레이터 [kineticnapier/DoMachinesDreamOfDeparture](https://github.com/kineticnapier/DoMachinesDreamOfDeparture) `src/dmdod/adofai/rules.py`. 같은 곳의 멀티프레스 게이지(+0.35, 1박 0.2 회복, 6박 뒤 초기화)는 무엇을 멀티프레스로 세는지 미확인이라 아직 안 넣음.
 
 ### 변환 규칙 (`src/levels/adofai.ts`)
 - 확장 필터(CameraFilterPack)는 **속성값으로 세기**를 정한다 (Blur_Movie 반경 0 = 꺼짐, PlanetMars/Sepia/GrayScale/Rain의 Fade, 등). 값 0으로 "끄는" 이벤트가 많다.
@@ -146,7 +148,6 @@ npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시�
 - AWC2026 'Once Forgotten, Nothing Remains'(ofnr, 13330타일, 오브젝트 399개): 살구색 사각형(네온 미드스핀 오브젝트)·회색 돌 고리(번호 없는 오브젝트)는 고침. 예각으로 꺾인 타일 모서리는 둥글게(#79, 1:40 네온 고리 원작과 일치), 미드스핀 타일은 끝이 둥근 D자. 남은 차이 — 행성 색(원작 녹화는 흰색, 플레이어 설정일 수 있음). 원작 녹화는 사용자가 보낸 화면 녹화(HUD에 '음악 시간' 표시).
 - `window.__orbitHide`는 장식 태그로도 숨길 수 있다.
 - 판정이 바뀌었으니 사용자에게 다시 보정해 보도록 안내함 — 피드백 받기.
-- "너무 빠름" 하한: 지금은 구간 시간의 절반보다 이른 입력은 무시 (원작은 더 많이 너무 빠름으로 셀 수 있음, 미확인).
 - 긴 곡 성능·메모리 (ofnr 10분 반 곡, 태블릿에서 탭이 꺼짐):
   - 음원 없을 때 합성 비트: 킥·하이햇 파형 재사용, 타일 찾기 선형, 5분 넘으면 16kHz → 불러오기 15초 → 1.4초.
   - 음원 디코딩: `AudioEngine.decodeBytes(u8, 곡 길이)` — 디코딩 결과가 예산(폰 120MB / PC 400MB)을 넘으면 표본율을 낮춘다(최저 22.05kHz). WAV는 `src/audio/wav.ts`로 직접 읽어 복사 없이 바로 옮김 (브라우저 디코더는 원래 표본율로 다 푼 뒤 줄여 중간 메모리가 1GB를 넘었다). 그 밖의 형식은 OfflineAudioContext(낮은 표본율) 디코딩. 탭 메모리 최고치 1.7GB → 0.5GB (Playwright Pixel 7 흉내, 렌더러 RSS).
