@@ -76,6 +76,7 @@ const FAIL_LABEL = {
   holdEarly: '홀드를 너무 일찍 뗐습니다',
   holdLate: '홀드를 너무 늦게 뗐습니다',
   rule: '이 구간은 그 판정이 나오면 실패예요 (맵 규칙)',
+  keyLimit: '정해진 개수보다 많은 키를 썼어요 (맵 키 제한)',
 } as const;
 type FailReason = keyof typeof FAIL_LABEL;
 
@@ -122,6 +123,11 @@ export class Game {
   private readonly tapErr: number[] = [];
   /** 타일마다 실패가 되는 판정 (원작 대회 규칙, JudgeRule) */
   private ruleAt: (ReadonlySet<string> | null)[] = [];
+  /** 원작 KeyLimiter: 타일별 적용 중인 키 제한 (null = 없음) */
+  private keyLimitAt: ({ floor: number; limit: number; exceed: 'ignore' | 'fail' | 'event'; tag?: string; once?: boolean } | null)[] = [];
+  /** 키 제한에 등록된 키 (처음 누른 순서대로, 터치는 모두 'touch') */
+  private keySet = new Set<string>();
+  private keyLimitFired = false;
   private failAt = 0;
   private clearAt = 0;
   private resumeAt = 0;
@@ -204,6 +210,15 @@ export class Game {
       while (ri < rules.length && rules[ri].floor <= i) cur = rules[ri++].fail.length ? new Set(rules[ri - 1].fail) : null;
       this.ruleAt[i] = cur;
     }
+    // 키 제한 → 타일별
+    const kls = this.chart.level.actions.filter((a) => a.type === 'KeyLimit').sort((a, b) => a.floor - b.floor) as { floor: number; limit: number; exceed: 'ignore' | 'fail' | 'event'; tag?: string; once?: boolean }[];
+    this.keyLimitAt = new Array(this.chart.tiles.length).fill(null);
+    let ki = 0;
+    let kcur: (typeof kls)[number] | null = null;
+    for (let i = 0; i < this.chart.tiles.length; i++) {
+      while (ki < kls.length && kls[ki].floor <= i) kcur = kls[ki++].limit > 0 ? kls[ki - 1] : null;
+      this.keyLimitAt[i] = kcur;
+    }
     stage.fitWide = settings.fitWide && this.fromAdofai;
     stage.setFrameAspect(settings.lockAspect && this.fromAdofai ? 16 / 9 : null);
     this.buffer = await loadPackageAudio(this.opts.pkg);
@@ -267,6 +282,8 @@ export class Game {
     this.resumeAt = 0;
     this.pausedSong = null;
     this.cur = floor;
+    this.keySet.clear();
+    this.keyLimitFired = false;
     this.beginFloor = floor;
     this.hold = null;
     this.held.clear();
@@ -430,6 +447,7 @@ export class Game {
     }
     if (this.state !== 'playing' || this.autoplay || this.hold) return;
     if (this.cur >= this.chart.finish) return;
+    if (!this.keyAllowed(ev)) return;
     // 자동 진행 구간 (원작 AutoPlayTiles): 누르기는 무시
     if (this.chart.tiles[this.cur].auto) return;
     const ti = this.judgeTime(ev.ts);
@@ -464,6 +482,30 @@ export class Game {
     this.tapErr.push(e + settings.inputOffset + this.devOffset);
     if (this.tapErr.length > 600) this.tapErr.splice(0, this.tapErr.length - 600);
     this.advance(j);
+  }
+
+  /**
+   * 원작 KeyLimiter: 처음 누른 limit개의 키만 인정한다 (터치·마우스는 모두 한 키).
+   * 그 밖의 키 — ignore면 무시, fail이면 실패, event면 태그 연출을 실행하고 무시. false = 이 입력은 판정하지 않는다.
+   */
+  private keyAllowed(ev: InputEvent): boolean {
+    const kl = this.keyLimitAt[this.cur];
+    if (!kl) return true;
+    const key = ev.id.startsWith('p') ? 'touch' : ev.id;
+    if (this.keySet.has(key)) return true;
+    if (this.keySet.size < kl.limit) {
+      this.keySet.add(key);
+      return true;
+    }
+    if (kl.exceed === 'fail') {
+      if (!this.noFail) this.fail('keyLimit');
+      return false;
+    }
+    if (kl.exceed === 'event' && kl.tag && !(kl.once && this.keyLimitFired)) {
+      this.keyLimitFired = true;
+      this.timeline.trigger(kl.floor, kl.tag, this.judgeTime(ev.ts));
+    }
+    return false;
   }
 
   /** 원작 SetConditionalEvents: 타일 from에서 나간 판정이 조건에 맞으면 그 태그의 연출을 시작 */

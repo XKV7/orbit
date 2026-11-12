@@ -340,6 +340,7 @@ export type Action =
   | ScreenAction
   | SoundAction
   | JudgeRuleAction
+  | KeyLimitAction
   | MultiPlanetAction
   | AutoPlayAction
   | PlanetEaseAction
@@ -363,6 +364,17 @@ export interface ConditionalAction extends ActionBase {
 }
 
 /** 이 타일부터 이 판정이 나오면 실패 (원작 대회용 SetConditionalEvents + 죽는 히트박스). 빈 목록 = 규칙 없음. */
+/**
+ * 쓸 수 있는 키 개수 제한 (원작 KeyLimiter): 이 타일부터 처음 누른 limit개의 키(터치는 모두 한 키)만 인정한다.
+ * exceed — 그 밖의 키를 누르면 ignore = 무시, fail = 실패, event = tag의 조건 연출 실행 (once면 한 번만). limit 0 = 끄기.
+ */
+export interface KeyLimitAction extends ActionBase {
+  type: 'KeyLimit';
+  limit: number;
+  exceed: 'ignore' | 'fail' | 'event';
+  tag?: string;
+  once?: boolean;
+}
 export interface JudgeRuleAction extends ActionBase {
   type: 'JudgeRule';
   fail: ('tooEarly' | 'early' | 'late' | 'earlyPerfect' | 'latePerfect')[];

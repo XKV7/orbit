@@ -76,6 +76,24 @@ describe('원작 이벤트: 홀드·자동 진행·공전 곡선·조건 연출'
     expect(tl.planetSize).toBe(0);
   });
 
+  it('KeyLimiter → 키 개수 제한 (넘으면 무시·실패·연출)', () => {
+    const r = level({
+      angleData: [0, 0, 0, 0],
+      actions: [
+        { floor: 1, eventType: 'KeyLimiter', enabled: true, limit: 16, exceedBehaviour: 'Ignore', targetTag: '', runEventBehaviour: 'Once' },
+        { floor: 2, eventType: 'KeyLimiter', enabled: true, limit: 2, exceedBehaviour: 'Kill', targetTag: '' },
+        { floor: 3, eventType: 'KeyLimiter', enabled: false, limit: 2, exceedBehaviour: 'Ignore' },
+      ],
+    });
+    const kl = r.level.actions.filter((a) => a.type === 'KeyLimit');
+    expect(kl).toEqual([
+      { floor: 1, type: 'KeyLimit', limit: 16, exceed: 'ignore', once: true },
+      { floor: 2, type: 'KeyLimit', limit: 2, exceed: 'fail' },
+      { floor: 3, type: 'KeyLimit', limit: 0, exceed: 'ignore' },
+    ]);
+    expect(r.warnings.join(' ')).not.toContain('KeyLimiter');
+  });
+
   it('SetObject trackStyle → 타일 오브젝트 스타일 바꾸기', () => {
     const r = level({
       angleData: [0, 0, 0],
