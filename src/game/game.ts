@@ -239,6 +239,8 @@ export class Game {
       stage.world.addChild(this.track.container, this.planets.container, this.deco.front, this.fx.container);
     } else stage.world.addChild(this.deco.behind, this.track.container, this.planets.container, this.deco.front, this.fx.container);
     stage.screenLayer.addChild(this.screenFx.weather);
+    // 뒤 버퍼(화면을 한 번 더 옮겨 그림)는 섞기 모드 장식을 쓰는 레벨에서만
+    stage.setBackBuffer((this.chart.level.decorations ?? []).some((d) => d.blend === 'overlay' || d.blend === 'soft-light' || d.blend === 'difference'));
     // 카메라가 따라가는 행성 위치 (월드, y 위쪽) — '직전 위치 기준' 카메라가 지금 중심을 계산할 때 쓴다
     this.timeline.playerPos = () => ({ x: this.camPivot.x, y: -this.camPivot.y });
     this.input.onEscape = () => this.togglePause();
@@ -252,6 +254,8 @@ export class Game {
 
   destroy(): void {
     stage.app.ticker.remove(this.tickerFn);
+    stage.setBackBuffer(true); // 에디터·타이틀 화면은 그대로
+
     document.removeEventListener('visibilitychange', this.visHandler);
     this.input.detach();
     this.eng.stop();
@@ -877,6 +881,9 @@ export class Game {
     this.deco.planetPos[1] = { x: this.planets.b.x, y: this.planets.b.y };
     this.deco.update(stage.camera.x, stage.camera.y, stage.camera.rotation, tr, stage.camera.zoom, stage.baseScale * stage.camera.zoom * stage.app.renderer.resolution);
     this.screenFx.screenH = stage.height;
+    // 흐림·빛 번짐 계산 해상도 (자동 화질) — 바탕은 늘 화면 해상도
+    this.screenFx.soft = stage.softScale;
+    if (this.backFx) this.backFx.soft = stage.softScale;
     const glowFs = this.screenFx.worldFilters(tl.bloom, reduce, this.chart.level.settings.glow ?? 1);
     const wideGlow = this.screenFx.bloomWide(tl.bloom);
     const worldFs = wideGlow ? [] : glowFs;

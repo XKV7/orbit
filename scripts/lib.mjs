@@ -22,7 +22,9 @@ export const CHROME_ARGS = ['--use-gl=swiftshader', '--enable-unsafe-swiftshader
  * 게임을 열고 레벨 파일(.adofai / .zip)을 불러와 자동 플레이로 시작한다.
  * startAt: 그 곡 시각의 타일부터 시작 (초), freezeAt: 그 곡 시각에서 화면 멈춤 (초, 선택).
  */
-export async function openAndPlay(page, { url, file, startAt = 0, freezeAt, settings }) {
+export async function openAndPlay(page, { url, file, startAt = 0, freezeAt, settings, quality = process.env.ORBIT_QUALITY }) {
+  // 화질 단계 고정 (ORBIT_QUALITY=0 등): 소프트웨어 GPU에서는 자동 화질이 금방 내려가 바꾸기 전·후 비교가 어긋난다
+  if (quality !== undefined && quality !== '') await page.addInitScript((q) => { window.__orbitQuality = Number(q); }, String(quality));
   await page.goto(url);
   if (settings) {
     await page.evaluate((s) => localStorage.setItem('orbit.settings.v1', JSON.stringify(s)), settings);
@@ -37,7 +39,8 @@ export async function openAndPlay(page, { url, file, startAt = 0, freezeAt, sett
     }
   }
   await page.waitForTimeout(500);
-  await page.locator('input[type=file]').first().setInputFiles(file);
+  // 레벨 불러오기 입력 (첫 번째 파일 입력은 '음원으로 레벨 만들기')
+  await page.locator('input[type=file][accept*=adofai]').first().setInputFiles(file);
   // 원작 맵 경고 창
   await page.waitForSelector('.modal-wrap', { timeout: 120000 });
   await page.locator('.modal-wrap button').last().click().catch(() => {});

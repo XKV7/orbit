@@ -13,11 +13,13 @@ const { chromium } = loadPlaywright();
 const b = await chromium.launch({ args: CHROME_ARGS });
 for (const t of times.map(Number)) {
   const p = await b.newPage({ viewport: { width: 960, height: 540 } });
+  p.on('pageerror', (e) => console.log('페이지 오류', String(e).slice(0, 300)));
   await openAndPlay(p, { url: `http://localhost:${port}/`, file, startAt: Math.max(0, t - 4), freezeAt: t });
   await waitSongTime(p, t - 0.001, 120000);
   await p.waitForTimeout(1500);
   await p.screenshot({ path: `${out}_${t}.png` });
-  console.log('saved', `${out}_${t}.png`);
+  const st = await p.evaluate(() => window.__orbitStats ?? {});
+  console.log('saved', `${out}_${t}.png`, `화질 단계 ${st.quality ?? '?'} · 계산 ${st.frameMs ?? '?'}ms · 그리기 ${st.renderMs ?? '?'}ms`);
   await p.close();
 }
 await b.close();

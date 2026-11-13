@@ -53,7 +53,7 @@ for (const t of ['시작', '플레이']) {
 await p.waitForTimeout(500);
 label = '불러오기';
 const t0 = Date.now();
-await p.locator('input[type=file]').first().setInputFiles(file);
+await p.locator('input[type=file][accept*=adofai]').first().setInputFiles(file);
 await p.waitForSelector('.modal-wrap', { timeout: 120000 }).catch(() => console.log('경고 창 없음'));
 console.log('불러오기', Date.now() - t0, 'ms', fmt(rss()));
 await p.locator('.modal-wrap button').last().click().catch(() => {});

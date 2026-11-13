@@ -1,5 +1,6 @@
 import { Application, Container, Filter, Graphics, RenderTexture, Sprite, Texture, TexturePool, TilingSprite } from 'pixi.js';
 import { TILE_LEN } from '../core/math';
+import { lowGpuRecently, markLowGpu } from './gpu';
 
 // 필터(흐림·색·왜곡·빛 번짐)는 기본이 1배 해상도라, 휴대폰(2배 화면)에서 필터가 켜지면 화면 전체가 절반 해상도로 뭉개졌다.
 // 화면 해상도를 따르게 한다 (필터를 만들기 전에).
@@ -123,20 +124,13 @@ export class Stage {
         prune();
       };
     }
-    // 전에 그래픽 메모리가 바닥났던 기기면 필터 해상도를 처음부터 낮춰 둔다
-    try {
-      if (localStorage.getItem('orbit.lowgpu') === '1') this.quality = 2;
-    } catch {
-      /* 무시 */
-    }
+    this.baseRes = this.app.renderer.resolution;
+    // 전에 그래픽 메모리가 바닥났던 기기: 흐림·빛 계산만 처음부터 가볍게 (화면·타일 해상도는 그대로)
+    if (lowGpuRecently()) this.quality = 1;
     // 그래픽 메모리가 바닥나면 브라우저가 WebGL을 끊어 화면이 새까매진다 → 알리고 다음부터 가볍게
     this.app.canvas.addEventListener('webglcontextlost', () => {
       this.contextLost = true;
-      try {
-        localStorage.setItem('orbit.lowgpu', '1');
-      } catch {
-        /* 무시 */
-      }
+      markLowGpu();
       showContextLost();
     });
     this.app.canvas.addEventListener('webglcontextrestored', () => (this.contextLost = false));
@@ -358,34 +352,70 @@ export class Stage {
     }
   }
 
-  /** 트랙 층 필터 (빛 번짐). */
-  // ── 자동 화질: 필터가 켜진 채로 프레임이 계속 느리면 한 단계씩 낮춘다 ──
-  // 0: 필터 = 화면 해상도, 1: 필터 1.5배, 2: 필터 1배, 3: 화면도 1.5배, 4: 화면도 1배
+  // ── 자동 화질: 프레임이 계속 느리면 한 단계씩 낮추고, 다시 빨라지면 되돌린다 ──
+  // 0: 그대로, 1: 흐림·빛 번짐 계산을 1/4 해상도로 (바탕은 그대로라 선명),
+  // 2: 화면 해상도 1.5배까지, 3: 화면 해상도 1배 — 화면 해상도를 낮추면 전체가 흐려지므로 정말 느릴 때만.
+  // 예전엔 1단계부터 필터가 걸린 층 전체(타일 포함)를 낮은 해상도로 그려 빛 번짐이 있는 장면에서 타일이 뿌옇게 보였다.
   private quality = 0;
+  private baseRes = 1;
   /** 그래픽 메모리 부족으로 WebGL이 끊겼는지 */
   contextLost = false;
   private frameEma = 16;
   private slowMs = 0;
-  private get filterRes(): number | 'inherit' {
-    return this.quality === 0 ? 'inherit' : this.quality === 1 ? 1.5 : 1;
+  private fastMs = 0;
+  /** 되돌리기 전에 빠른 상태가 이어져야 하는 시간 (ms) — 되돌렸다가 곧 다시 느려지면 두 배로 (왔다 갔다 하지 않게) */
+  private raiseHold = 12000;
+  private lastRaise = -1e9;
+  /** 흐림·빛 번짐 계산 해상도 배율 (ScreenFx.soft) */
+  get softScale(): number {
+    return this.quality >= 1 ? 0.25 : 0.5;
   }
   /** 매 프레임 (게임 중에만): 걸린 시간(ms)과 필터가 켜져 있는지. */
   adaptQuality(frameMs: number, filtersOn: boolean): void {
+    // 자동 시험: 화질 단계 고정 (window.__orbitQuality = 0~3)
+    const fixed = (window as unknown as { __orbitQuality?: number }).__orbitQuality;
+    if (fixed !== undefined) {
+      if (fixed !== this.quality) this.setQuality(fixed);
+      return;
+    }
     if (frameMs > 250) return; // 탭 전환·일시 멈춤은 무시
     this.frameEma += (frameMs - this.frameEma) * 0.05;
-    // 약 40fps보다 느린 상태가 2초 이어지면 한 단계 내린다
-    if (this.frameEma > 25 && filtersOn) this.slowMs += frameMs;
+    // 1단계는 필터가 있을 때만 효과가 있다. 화면 해상도(2·3단계)는 약 33fps보다 느릴 때만
+    const next = this.quality === 0 && filtersOn ? 1 : Math.max(2, this.quality + 1);
+    const limit = next === 1 ? 25 : 30;
+    if (this.frameEma > limit && next <= 3 && (next > 1 || filtersOn)) this.slowMs += frameMs;
     else this.slowMs = Math.max(0, this.slowMs - frameMs);
-    if (this.slowMs < 2000 || this.quality >= 4) return;
-    this.slowMs = 0;
-    this.frameEma = 16;
-    this.quality++;
-    const base = this.app.renderer.resolution;
-    if (this.quality >= 3 && base > 1) {
-      const r = this.quality === 3 ? Math.min(base, 1.5) : 1;
-      this.app.renderer.resize(this.width, this.height, r);
+    // 거의 화면 주기대로(약 55fps 이상) 도는 상태가 이어지면 한 단계 되돌린다 (60Hz 화면은 한 프레임이 16.7ms)
+    if (this.quality > 0 && this.frameEma < 18) this.fastMs += frameMs;
+    else this.fastMs = 0;
+    const now = performance.now();
+    if (this.slowMs >= (next === 1 ? 2000 : 3000)) {
+      this.slowMs = 0;
+      this.fastMs = 0;
+      this.frameEma = 16;
+      // 되돌린 지 20초 안에 다시 느려졌으면 다음 되돌리기는 더 오래 기다린다
+      if (now - this.lastRaise < 20000) this.raiseHold = Math.min(120000, this.raiseHold * 2);
+      this.setQuality(next);
+      console.info(`[ORBIT] 느려서 화질을 한 단계 낮춥니다 (단계 ${this.quality})`);
+    } else if (this.fastMs > this.raiseHold) {
+      this.fastMs = 0;
+      this.lastRaise = now;
+      this.setQuality(this.quality === 2 && !filtersOn ? 0 : this.quality - 1);
+      console.info(`[ORBIT] 빨라져서 화질을 되돌립니다 (단계 ${this.quality})`);
     }
-    console.info(`[ORBIT] 느려서 화질을 한 단계 낮춥니다 (단계 ${this.quality})`);
+  }
+  private setQuality(q: number): void {
+    this.quality = Math.max(0, Math.min(3, q));
+    const r = this.quality >= 3 ? 1 : this.quality === 2 ? Math.min(this.baseRes, 1.5) : this.baseRes;
+    if (this.app.renderer.resolution !== r) this.app.renderer.resize(this.width, this.height, r);
+  }
+  /**
+   * 장식 섞기(오버레이·소프트 라이트·차이)를 쓰는 레벨에서만 뒤 버퍼를 켠다.
+   * 켜 두면 매 프레임 화면 밖에 그린 뒤 화면으로 한 번 더 옮겨 그려(전체 화면 한 번 더) 태블릿에서 무겁다.
+   */
+  setBackBuffer(on: boolean): void {
+    const bb = (this.app.renderer as unknown as { backBuffer?: { useBackBuffer: boolean } }).backBuffer;
+    if (bb) bb.useBackBuffer = on;
   }
   // ── 고주사율(120Hz 등) 화면: 한 프레임 일이 화면 주기를 못 따라가면 60fps로 맞춘다 ──
   // (판정은 입력 시각 기준이라 영향 없음. 들쭉날쭉한 8ms/16ms 섞임보다 고른 60fps가 덜 끊겨 보인다)
@@ -422,9 +452,9 @@ export class Stage {
   get qualityLevel(): number {
     return this.quality;
   }
+  /** 필터가 걸린 층은 늘 화면 해상도로 (낮추면 그 층의 타일·장식까지 흐려진다) */
   private applyRes(fs: Filter[]): void {
-    const r = this.filterRes;
-    for (const f of fs) if (f.resolution !== r) f.resolution = r;
+    for (const f of fs) if (f.resolution !== 'inherit') f.resolution = 'inherit';
   }
 
   setWorldFilters(fs: Filter[]): void {

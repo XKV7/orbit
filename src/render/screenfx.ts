@@ -1,5 +1,6 @@
 import { KawaseBlurFilter } from 'pixi-filters/kawase-blur';
 import {
+  AlphaFilter,
   BlurFilter,
   ColorMatrixFilter,
   Container,
@@ -322,6 +323,44 @@ void main() {
   finalColor = vec4(c.rgb * smoothstep(uThr, min(1.0, uThr + 0.25), l), 1.0);
 }`;
 
+/**
+ * 입력과 같은 영역을 덮는 낮은 해상도 풀 텍스처 (scale = 입력 해상도 대비 배율).
+ * 흐림 단계는 결과가 어차피 흐려서 낮은 해상도로 해도 똑같아 보이고, 그리는 양은 scale² 로 준다.
+ * 바탕(타일·배경)은 원래 해상도 그대로 두어 선명하게 — 필터 전체 해상도를 낮추면 타일까지 흐려졌다.
+ */
+function aligned(input: Texture, scale: number): Texture {
+  const pool = TexturePool as unknown as { getAlignedTexture?: (t: Texture, r: number) => Texture };
+  if (scale >= 0.999 || !pool.getAlignedTexture) return TexturePool.getSameSizeTexture(input);
+  const res = (input.source as unknown as { _resolution: number })._resolution ?? 1;
+  return pool.getAlignedTexture(input, res * scale);
+}
+
+/**
+ * 흐림(원작 Blur 등)을 낮은 해상도에서: 줄여 옮기고 → 흐리고 → 원래 크기로 늘린다.
+ * 흐림이 약하면(몇 px) 줄이는 것만으로 달라 보이니 원래 해상도로.
+ */
+class SoftBlurFilter extends AlphaFilter {
+  readonly inner = new BlurFilter({ strength: 0, quality: 2 });
+  private readonly copy = new AlphaFilter({ alpha: 1 });
+  /** 흐림 단계 해상도 배율 (1 = 원래) */
+  scale = 0.5;
+  override apply(fm: FilterSystem, input: Texture, output: RenderSurface, clear: boolean): void {
+    const strength = Math.max(this.inner.strengthX, this.inner.strengthY);
+    const k = strength >= 4 ? this.scale : 1;
+    if (k >= 0.999) {
+      this.inner.apply(fm, input, output, clear);
+      return;
+    }
+    const small = aligned(input, k);
+    this.copy.apply(fm, input, small, true);
+    const blurred = aligned(input, k);
+    this.inner.apply(fm, small, blurred, true);
+    this.copy.apply(fm, blurred, output, clear);
+    TexturePool.returnTexture(blurred);
+    TexturePool.returnTexture(small);
+  }
+}
+
 /** 밝은 부분만 남기기 */
 class ExtractFilter extends Filter {
   constructor() {
@@ -384,12 +423,14 @@ class GlowFilter extends Filter {
     u.uColor[1] = ((color >> 8) & 255) / 255;
     u.uColor[2] = (color & 255) / 255;
   }
+  /** 흐림 단계 해상도 배율 — 넓은 빛무리는 그 절반 (빛은 원래 흐리므로 낮은 해상도로 해도 같은 모양, 그리는 양은 1/4~1/16) */
+  soft = 0.5;
   override apply(fm: FilterSystem, input: Texture, output: RenderSurface, clear: boolean): void {
-    const bright = TexturePool.getSameSizeTexture(input);
+    const bright = aligned(input, this.soft);
     this.extract.apply(fm, input, bright, true);
-    const blurred = TexturePool.getSameSizeTexture(input);
+    const blurred = aligned(input, this.soft);
     this.kawase.apply(fm, bright, blurred, true);
-    const wide = TexturePool.getSameSizeTexture(input);
+    const wide = aligned(input, this.soft * 0.5);
     this.kawase2.apply(fm, blurred, wide, true);
     this.resources.uMapTexture = blurred.source;
     this.resources.uMap2Texture = wide.source;
@@ -412,7 +453,15 @@ interface Flake {
 
 export class ScreenFx {
   private readonly cm = new ColorMatrixFilter();
-  private readonly blur = new BlurFilter({ strength: 0, quality: 2 });
+  private readonly softBlur = new SoftBlurFilter();
+  private get blur(): BlurFilter {
+    return this.softBlur.inner;
+  }
+  /** 흐림·빛 번짐 계산 해상도 배율 (자동 화질이 낮추면 0.25) — 바탕 해상도는 그대로 */
+  set soft(v: number) {
+    this.softBlur.scale = v;
+    if (this.glow) this.glow.soft = v;
+  }
   private readonly noise = new NoiseFilter({ noise: 0 });
   private readonly distort: DistortFilter | null;
   private readonly glow: GlowFilter | null;
@@ -514,7 +563,8 @@ export class ScreenFx {
       const b = 3 * Math.min(2.7, bl);
       this.blur.strengthX = b + (mx > 1 ? mx : 0);
       this.blur.strengthY = b + (my > 1 ? my : 0);
-      out.push(this.blur);
+      this.softBlur.padding = this.blur.padding;
+      out.push(this.softBlur);
     }
 
     // 잡음
