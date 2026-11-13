@@ -5,6 +5,7 @@ import { lerpColor, parseColor, scaleColor } from '../core/color';
 import { degToRad, TILE_LEN } from '../core/math';
 import type { DecoState, VisualTimeline } from '../core/timeline';
 import type { ParticleDef } from '../core/types';
+import { lowGpuRecently } from './gpu';
 import { blockContexts, iconContext, PLANET_R, type IconKind } from './shapes';
 
 /** 원작 장식 이미지 1px의 월드 크기 (원작: 100px = 1 유닛, 타일 간격 = 1.5 유닛). */
@@ -78,27 +79,27 @@ function decoded(img: HTMLImageElement): Promise<void> {
 }
 
 const MOBILE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+/** 기기 메모리 (GB, 크롬 계열만 알려 줌 — 모르면 4로 본다) */
+const DEVICE_GB = (typeof navigator !== 'undefined' && (navigator as unknown as { deviceMemory?: number }).deviceMemory) || 4;
+/** 사흘 안에 그래픽 메모리가 바닥나 화면이 꺼졌던 기기면 그림을 더 작게 (예전엔 한 번 꺼지면 영영 작게 올려 흐렸다) */
+const LOW_GPU = lowGpuRecently();
+/** 메모리가 넉넉한 태블릿·폰 (6GB 이상) — 큰 화면에서 배경 그림이 흐리지 않게 더 크게 */
+const BIG_MOBILE = MOBILE && DEVICE_GB >= 6;
 /**
  * GPU에 올릴 그림 최대 크기 (넘으면 줄여서 올린다). 휴대폰은 큰 그림 수십 장이 한꺼번에 보이면
  * GPU 메모리가 모자라 그림이 통째로 안 그려지거나 화면이 꺼지므로 작게.
  */
-const MAX_TEX = MOBILE ? (lowGpu() ? 1024 : 2048) : lowGpu() ? 2048 : 4096;
+const MAX_TEX = LOW_GPU ? (MOBILE ? 1024 : 2048) : MOBILE ? (BIG_MOBILE ? 4096 : 2048) : 4096;
 
-/** 한 번 그래픽 메모리가 바닥나 화면이 꺼졌던 기기면 그림을 더 작게 */
-function lowGpu(): boolean {
-  try {
-    return localStorage.getItem('orbit.lowgpu') === '1';
-  } catch {
-    return false;
-  }
-}
 /** 한꺼번에 해독하는 그림 수 (휴대폰에서 수십 장을 동시에 풀면 메모리가 튄다) */
 const MAX_LOADING = MOBILE ? 3 : 4;
+/** 동시에 더 크게 다시 올리는 그림 수 */
+const MAX_UPGRADING = MOBILE ? 2 : 3;
 /**
  * 장식 그림이 GPU에서 차지해도 되는 총량 (바이트). 넘으면 화면에 안 보이는 그림부터 내리고, 그래도 모자라면 줄여서 올린다.
  * Phantigma 원작처럼 5000px 그림이 수십 장(합계 7억 화소)이면 PC에서도 그래픽 메모리가 넘쳐 WebGL이 꺼지고 타일까지 사라졌다.
  */
-const TEX_BUDGET = (MOBILE ? (lowGpu() ? 128 : 256) : lowGpu() ? 384 : 768) * 1024 * 1024;
+const TEX_BUDGET = (LOW_GPU ? (MOBILE ? 128 : 384) : MOBILE ? (BIG_MOBILE ? 384 : 256) : 768) * 1024 * 1024;
 /** 예산 때문에 줄일 때도 이보다 작게는 줄이지 않는다 (긴 변, px) */
 const MIN_SIDE = 256;
 /** 이만큼(ms) 안 보인 그림은 GPU에서 내린다 (다시 보이면 새로 불러온다) */
@@ -144,6 +145,8 @@ export class DecorationView {
   private readonly needSide = new Map<string, number>();
   /** 더 큰 해상도로 다시 올리는 중인 그림 */
   private readonly upgrading = new Set<string>();
+  /** 키울 자리가 없어 미룬 그림 → 그때 시각 */
+  private readonly upgradeHold = new Map<string, number>();
   private lastUpgrade = 0;
   /** 월드 1단위가 화면에서 몇 픽셀인가 (카메라 확대·화면 해상도 포함) */
   private pxPerWorld = 1;
@@ -320,7 +323,7 @@ export class DecorationView {
    * 해독한 그림을 GPU에 올린다. 화면에서 실제로 보이는 크기(needSide)만큼만 — 5000px 그림도 화면에 1500px로 보이면
    * 그 해상도면 원본과 똑같이 보인다. 그래픽 메모리 예산을 넘으면 안 보이는 그림부터 내리고, 그래도 모자라면 줄인다.
    */
-  private build(name: string, img: HTMLImageElement, minSide = 0): Texture {
+  private build(name: string, img: HTMLImageElement, minSide = 0, replacing = 0): Texture {
     const w = img.naturalWidth;
     const h = img.naturalHeight;
     const side = Math.max(w, h, 1);
@@ -329,8 +332,9 @@ export class DecorationView {
     const target = Math.max(minSide, need !== undefined ? need * 1.15 : side, MIN_SIDE);
     let k = Math.min(1, MAX_TEX / side, target / side);
     const want = w * h * 4 * k * k;
-    if (this.gpuBytes + want > TEX_BUDGET) this.evict(this.gpuBytes + want - TEX_BUDGET, performance.now());
-    const room = TEX_BUDGET - this.gpuBytes;
+    // replacing: 이 텍스처로 바꾸면 내려갈 예전 텍스처 크기 (자리로 친다)
+    if (this.gpuBytes - replacing + want > TEX_BUDGET) this.evict(this.gpuBytes - replacing + want - TEX_BUDGET, performance.now());
+    const room = TEX_BUDGET - this.gpuBytes + replacing;
     if (want > room) {
       const minK = Math.min(1, MIN_SIDE / side);
       k = Math.max(minK, k * Math.sqrt(Math.max(0, room) / want));
@@ -358,21 +362,55 @@ export class DecorationView {
     return t;
   }
 
-  /** 지금 올린 해상도가 화면에 필요한 것보다 많이 낮으면 (확대됨) 원본에서 더 크게 다시 올린다. */
+  /**
+   * 지금 올린 해상도가 화면에 필요한 것보다 낮으면 (카메라가 다가가 확대됨) 원본에서 더 크게 다시 올린다.
+   * 지금 보이는 그림 중 가장 많이 확대된 것부터, 동시에 몇 장씩. 예산이 차 있으면 안 보이는 그림을 내려 자리를 만든다.
+   * (예전: 0.4초에 한 장, 예산 95%면 건너뜀 → 카메라가 빠르게 다가가는 장면(Phantigma)에서 작은 그림을 크게 늘린 채
+   *  뭉개진 덩어리로 오래 보였다)
+   */
   private upgrade(now: number): void {
-    if (now - this.lastUpgrade < 400) return;
+    if (now - this.lastUpgrade < 120) return;
     this.lastUpgrade = now;
-    for (const [name, t] of this.tex) {
-      if (!t || t === 'loading' || this.upgrading.has(name)) continue;
-      const nat = this.nativeSide.get(name);
-      const need = this.needSide.get(name);
-      if (!nat || need === undefined) continue;
-      const cur = Math.max(t.width, t.height);
-      const goal = Math.min(nat, MAX_TEX, need * 1.15);
-      if (cur >= nat - 1 || cur >= goal * 0.7) continue;
-      if (this.gpuBytes > TEX_BUDGET * 0.95) continue;
+    while (this.upgrading.size < MAX_UPGRADING) {
+      let best: string | null = null;
+      let bestRatio = 1;
+      let bestGoal = 0;
+      let bestCur: Texture | null = null;
+      for (const [name, t] of this.tex) {
+        if (!t || t === 'loading' || this.upgrading.has(name)) continue;
+        if (now - (this.lastUsed.get(name) ?? 0) > 500) continue; // 지금 안 보이는 그림은 나중에
+        if (now - (this.upgradeHold.get(name) ?? -1e9) < 3000) continue; // 자리가 없어 실패한 직후
+        const nat = this.nativeSide.get(name);
+        const need = this.needSide.get(name);
+        if (!nat || need === undefined) continue;
+        const cur = Math.max(t.width, t.height);
+        const goal = Math.min(nat, MAX_TEX, need * 1.15);
+        if (cur >= nat - 1 || cur >= goal * 0.85) continue;
+        const ratio = goal / cur;
+        if (ratio > bestRatio) {
+          bestRatio = ratio;
+          best = name;
+          bestGoal = goal;
+          bestCur = t;
+        }
+      }
+      if (!best || !bestCur) return;
+      // 자리: 새 텍스처 크기 - 지금 텍스처 크기. 모자라면 안 보이는 그림부터 내린다
+      const curBytes = this.texBytes.get(bestCur) ?? 0;
+      const extra = curBytes * bestRatio * bestRatio - curBytes;
+      if (this.gpuBytes + extra > TEX_BUDGET) this.evict(this.gpuBytes + extra - TEX_BUDGET, now);
+      // 그래도 지금보다 1.2배 넘게 키울 자리가 없으면 잠시 미룬다 (같은 크기로 다시 올리기만 반복하지 않게)
+      if (TEX_BUDGET - this.gpuBytes < curBytes * 0.44) {
+        this.upgradeHold.set(best, now);
+        continue;
+      }
+      const name = best;
+      const goal = bestGoal;
       const url = this.urlOf(name);
-      if (!url) continue;
+      if (!url) {
+        this.upgradeHold.set(name, now);
+        continue;
+      }
       this.upgrading.add(name);
       const img = new Image();
       img.src = url;
@@ -381,11 +419,10 @@ export class DecorationView {
           this.upgrading.delete(name);
           const old = this.tex.get(name);
           if (this.destroyed || !old || old === 'loading') return;
-          this.swap(name, old, this.build(name, img, goal));
+          this.swap(name, old, this.build(name, img, goal, this.texBytes.get(old) ?? 0));
         },
         () => this.upgrading.delete(name),
       );
-      return; // 한 번에 한 장씩
     }
   }
 

@@ -13,7 +13,8 @@ if (!file || startArg === undefined) {
 const startAt = Number(startArg);
 const { chromium } = loadPlaywright();
 const b = await chromium.launch({ args: CHROME_ARGS });
-const p = await b.newPage({ viewport: { width: 1280, height: 800 } });
+// ORBIT_DPR=2: 태블릿처럼 화면 배율 2 (그리는 픽셀 수 4배 — GPU 부담 비교용)
+const p = await b.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: Number(process.env.ORBIT_DPR || 1) });
 const cdp = await p.context().newCDPSession(p);
 await openAndPlay(p, { url: `http://localhost:${port}/`, file, startAt });
 await waitSongTime(p, startAt + 1, 120000);
@@ -29,7 +30,7 @@ while (Date.now() - t0 < 8000) {
   samples.push(
     await p.evaluate(() => {
       const s = window.__orbitStats || {};
-      return [s.frameMs, s.renderMs, s.tiles, s.decos];
+      return [s.frameMs, s.renderMs, s.tiles, s.decos, window.__orbitStage?.fps ?? 0];
     }),
   );
   await p.waitForTimeout(250);
@@ -51,5 +52,5 @@ if (prof) {
 const v = samples.filter((x) => x[0] !== undefined);
 const avg = (k) => (v.reduce((a, x) => a + x[k], 0) / v.length).toFixed(2);
 const p90 = (k) => v.map((x) => x[k]).sort((a, b) => a - b)[Math.floor(v.length * 0.9)];
-console.log(`표본 ${v.length} · 계산 평균 ${avg(0)}ms (90% ${p90(0)}) · 그리기 평균 ${avg(1)}ms (90% ${p90(1)}) · 타일 ${avg(2)} · 장식 ${avg(3)}`);
+console.log(`표본 ${v.length} · ${avg(4)} fps · 계산 평균 ${avg(0)}ms (90% ${p90(0)}) · 그리기 평균 ${avg(1)}ms (90% ${p90(1)}) · 타일 ${avg(2)} · 장식 ${avg(3)}`);
 await b.close();
