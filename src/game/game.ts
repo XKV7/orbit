@@ -461,7 +461,6 @@ export class Game {
     }
     if (this.state !== 'playing' || this.autoplay || this.hold) return;
     if (this.cur >= this.chart.finish) return;
-    if (!this.keyAllowed(ev)) return;
     // 자동 진행 구간 (원작 AutoPlayTiles): 누르기는 무시
     if (this.chart.tiles[this.cur].auto) return;
     const ti = this.judgeTime(ev.ts);
@@ -471,6 +470,10 @@ export class Game {
     // 원작: 판정 창보다 이른 입력은 얼마나 이르든 모두 '너무 빠름' (scrMisc.GetHitMargin은 TooEarly에서 시작)
     const j = judgeError(e, w, Infinity);
     if (j === null) return;
+    // 시작 카운트다운(3·2·1) 동안은 입력을 받지 않는다: (재)시작 뒤 첫 타격의 판정 창이 열리기 전 누르기는
+    // 너무 빠름·과부하·멀티프레스·키 제한 어디에도 넣지 않는다 (카운트다운 중 연타로 시작도 전에 실패하던 문제)
+    if (j === 'tooEarly' && this.cur === this.beginFloor) return;
+    if (!this.keyAllowed(ev)) return;
     // 맵 규칙: 이 구간에서 금지된 판정이면 실패
     if (this.ruleAt[this.cur + 1]?.has(j)) {
       if (!this.noFail) {
