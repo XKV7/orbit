@@ -1,8 +1,8 @@
 import { beatMs, beatPhaseAt, compileChart, orbiterAngle, resumeTime, type Chart } from '../core/chart';
-import { adofaiWindows, advances, JUDGE_COLOR, JUDGE_LABEL, judgeError, OverloadTracker, type Judgment } from '../core/judge';
+import { adofaiWindows, advances, JUDGE_COLOR, JUDGE_LABEL, judgeError, meterPos, OverloadTracker, type Judgment } from '../core/judge';
 import { dirSign, TILE_LEN } from '../core/math';
 import { analyzeOffsets, type OffsetHint } from '../core/offset';
-import { PlayStats } from '../core/stats';
+import { PlayStats, type JudgeCounts } from '../core/stats';
 import { cameraCenter, VisualTimeline, type FilterState } from '../core/timeline';
 import { deviceOffsetMs } from '../audio/device';
 import { audio } from '../audio/engine';
@@ -49,6 +49,25 @@ export interface GameHud {
   showFail(reason: string | null, hint?: OffsetHint | null): void;
   setPaused(p: boolean): void;
   setResumeCountdown(n: number | null): void;
+  /** 진행 정보 (약 0.1초마다) */
+  setStats?(s: LiveStats): void;
+  /** 판정 하나 (계기판 눈금): pos = -1 빠름 … 0 정확 … +1 느림 */
+  hit?(j: Judgment, pos: number): void;
+}
+
+/** 플레이 중 진행 정보 (원작 오버레이처럼) */
+export interface LiveStats {
+  progress: number;
+  accuracy: number;
+  xAccuracy: number;
+  combo: number;
+  /** 지금 타일 번호 · 마지막 타일 번호 */
+  tile: number;
+  total: number;
+  /** 곡 시각 · 곡 길이 (초) */
+  time: number;
+  length: number;
+  counts: JudgeCounts;
 }
 
 export interface GameOptions {
@@ -142,6 +161,12 @@ export class Game {
     this.frame();
     this.frameCpu = performance.now() - t;
   };
+  private lastStatsAt = 0;
+  /** 곡 길이 (초): 음원 길이, 없으면 마지막 타일 시각 */
+  private get songLength(): number {
+    const d = (this.buffer as { duration?: number } | null | undefined)?.duration;
+    return d && d > 0 ? d : this.chart.tiles[this.chart.finish]?.time ?? 0;
+  }
   /** 지난 프레임 계산 시간 (ms, 진단용) */
   private frameCpu = 0;
   private visHandler = () => {
@@ -494,13 +519,16 @@ export class Game {
       this.fireCond(this.cur, j, ti);
       this.stats.recordTooEarly(this.cur + 1);
       this.showJudge(this.cur + 1, j);
+      this.opts.hud.hit?.(j, meterPos(e, w));
       if (this.overload.push()) this.fail('overload');
       return;
     }
     if (j === 'miss') {
+      this.opts.hud.hit?.(j, meterPos(e, w));
       this.fail('miss');
       return;
     }
+    this.opts.hud.hit?.(j, meterPos(e, w));
     this.tapErr.push(e + settings.inputOffset + this.devOffset);
     if (this.tapErr.length > 600) this.tapErr.splice(0, this.tapErr.length - 600);
     this.advance(j);
@@ -595,6 +623,7 @@ export class Game {
       return;
     }
     this.hold = null;
+    if (!this.autoAt(h.floor)) this.opts.hud.hit?.(j, meterPos(e, w));
     if (h.toNext) {
       // 떼기가 다음 타일 도착 판정
       if (this.chart.tiles[h.floor].auto && !this.autoplay) this.advanceAuto();
@@ -780,8 +809,10 @@ export class Game {
           if (this.autoAt(h.floor) && tj >= h.release) this.judgeRelease(h.release);
           else break;
         } else if (this.cur < ch.finish && this.autoAt(this.cur) && tj >= ch.times[this.cur + 1]) {
-          if (this.autoplay) this.advance('perfect');
-          else this.advanceAuto();
+          if (this.autoplay) {
+            this.opts.hud.hit?.('perfect', 0);
+            this.advance('perfect');
+          } else this.advanceAuto();
         } else break;
       }
       // 홀드 떼기 시간 초과
@@ -793,8 +824,10 @@ export class Game {
       // (무적 모드는 한 프레임에 여러 타일을 놓칠 수 있어 따라잡을 때까지)
       for (let guard = 0; this.state === 'playing' && !this.hold && this.cur < ch.finish && guard < 10000; guard++) {
         const w = this.windowsFor(this.cur);
-        if (tj > ch.times[this.cur + 1] + ((w.grace ?? w.far) / 1000) * this.pitch) this.fail('miss');
-        else break;
+        if (tj > ch.times[this.cur + 1] + ((w.grace ?? w.far) / 1000) * this.pitch) {
+          this.opts.hud.hit?.('miss', 1);
+          this.fail('miss');
+        } else break;
         if (!this.noFail) break;
       }
       // 자동 타격음 예약
@@ -943,6 +976,21 @@ export class Game {
     // HUD
     hud.setProgress(ch.finish > 0 ? this.cur / ch.finish : 1);
     hud.setAccuracy(this.stats.accuracy(), this.stats.xAccuracy());
+    // 진행 정보 오버레이 (0.1초마다면 충분)
+    if (hud.setStats && now - this.lastStatsAt > 100) {
+      this.lastStatsAt = now;
+      hud.setStats({
+        progress: ch.finish > 0 ? (this.cur / ch.finish) * 100 : 100,
+        accuracy: this.stats.accuracy(),
+        xAccuracy: this.stats.xAccuracy(),
+        combo: this.stats.combo,
+        tile: this.cur,
+        total: ch.finish,
+        time: Math.max(0, tr),
+        length: this.songLength,
+        counts: this.stats.counts(),
+      });
+    }
     const target = ch.tiles[this.beginFloor];
     const beat = 60 / ch.tiles[Math.max(0, this.beginFloor - 1)].bpm;
     const left = (target.time - tr) / beat;

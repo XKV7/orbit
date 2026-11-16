@@ -24,6 +24,10 @@ export interface UserSettings {
   trackOutline: boolean;
   /** 플레이 중 화면 구석에 초당 프레임·계산 시간 표시 (느린 장면 찾기) */
   showFps: boolean;
+  /** 플레이 중 진행 정보 (진행도·정확도·콤보·타일 수·음악 시간) */
+  showStats: boolean;
+  /** 판정 계기판 (친 타이밍 눈금·판정 수) */
+  showHitMeter: boolean;
 }
 
 const KEY = 'orbit.settings.v1';
@@ -54,6 +58,8 @@ export function defaultUserSettings(): UserSettings {
     lockAspect: true,
     trackOutline: true,
     showFps: false,
+    showStats: true,
+    showHitMeter: true,
   };
 }
 

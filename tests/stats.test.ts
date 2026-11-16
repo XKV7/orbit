@@ -33,4 +33,24 @@ describe('절대정확도 (원작 X-Accuracy)', () => {
     fill(m, { perfect: 10, miss: 10 }, 0);
     expect(m.xAccuracy()).toBeCloseTo(50);
   });
+
+  it('판정 수는 기록이 바뀔 때만 다시 세고, 돌려준 값을 고쳐도 안쪽은 그대로 · 콤보는 지금 이어지는 완벽 수', () => {
+    const s = new PlayStats();
+    s.recordHit(1, 'perfect');
+    s.recordHit(2, 'perfect');
+    expect(s.combo).toBe(2);
+    const c = s.counts();
+    c.perfect = 99;
+    expect(s.counts().perfect).toBe(2);
+    s.recordHit(3, 'early');
+    expect(s.counts().early).toBe(1);
+    expect(s.combo).toBe(0);
+    s.recordTooEarly(4);
+    expect(s.counts().tooEarly).toBe(1);
+    s.truncateAfter(2);
+    expect(s.counts()).toMatchObject({ perfect: 2, early: 0, tooEarly: 0 });
+    s.reset();
+    expect(s.counts().perfect).toBe(0);
+  });
 });
+

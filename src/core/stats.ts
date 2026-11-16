@@ -26,16 +26,25 @@ export class PlayStats {
   holdFails = 0;
   private streak = 0;
   maxStreak = 0;
+  /** 판정 수 (기록이 바뀔 때만 다시 센다 — 정확도는 매 프레임 그리는데, 긴 곡(1만 타일)에서 매번 다 세면 무겁다) */
+  private cached: JudgeCounts | null = null;
+  /** 지금 이어지는 완벽 연속 (원작 Combo) */
+  get combo(): number {
+    return this.streak;
+  }
 
   recordHit(floor: number, j: Judgment): void {
+    this.cached = null;
     this.hits.set(floor, j);
     this.bumpStreak(j);
   }
   recordRelease(floor: number, j: Judgment): void {
+    this.cached = null;
     this.releases.set(floor, j);
     this.bumpStreak(j);
   }
   recordTooEarly(floor: number): void {
+    this.cached = null;
     this.tooEarly.set(floor, (this.tooEarly.get(floor) ?? 0) + 1);
     this.streak = 0;
   }
@@ -48,12 +57,14 @@ export class PlayStats {
 
   /** floor 이후(초과) 기록 삭제 — 체크포인트 재개. */
   truncateAfter(floor: number): void {
+    this.cached = null;
     for (const m of [this.hits, this.tooEarly, this.releases] as Map<number, unknown>[])
       for (const k of [...m.keys()]) if (k > floor) m.delete(k);
     this.streak = 0;
   }
 
   reset(): void {
+    this.cached = null;
     this.hits.clear();
     this.tooEarly.clear();
     this.releases.clear();
@@ -68,11 +79,13 @@ export class PlayStats {
   }
 
   counts(): JudgeCounts {
+    if (this.cached) return { ...this.cached };
     const c = emptyCounts();
     for (const j of this.hits.values()) c[j]++;
     for (const j of this.releases.values()) c[j]++;
     for (const n of this.tooEarly.values()) c.tooEarly += n;
-    return c;
+    this.cached = c;
+    return { ...c };
   }
 
   /** 정확도 (0~100). 기록이 없으면 100. */
