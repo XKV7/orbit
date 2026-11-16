@@ -8,7 +8,7 @@
 ## 0. 처음 이어받을 때 (체크리스트)
 
 1. 사용자는 한국어로 말한다 → **답변은 한국어**. 커밋 메시지·PR 본문은 영어.
-2. 준비: `npm ci` → `npx vitest run` (198개 통과해야 정상) → `npm run build`.
+2. 준비: `npm ci` → `npx vitest run` (200개 통과해야 정상) → `npm run build`.
 3. `main`이 기준이다. 열린 PR이 있는지, 마지막 Firebase 배포가 성공했는지 본다 (2절).
 4. 8절의 **사용자 응답 대기** 항목 — 사용자가 캡처·파일을 보내면 그것부터 이어서 본다.
 5. 다른 계정이면:
@@ -52,7 +52,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 198개 통과)
+npx vitest run         # 테스트 (현재 200개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -76,7 +76,7 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 - `src/render/` — `stage.ts`(Pixi 앱, 레이어: backPlane[bg+backWorld] / worldWrap[world] / overlay, 필터 적용, 잔상, 화질 자동 조절 `adaptQuality`, 고주사율 60fps 고정 `adaptRate`), `track.ts`(타일, 스타일 orbit/standard/neon/basic/neonlight, 격자로 화면 근처 타일만), `planets.ts`(행성 2·3개), `decorations.ts`(장식·입자·가림막·텍스처 메모리 예산), `screenfx.ts`(화면 필터 셰이더(GLSL)·빛 번짐·충격파), `shapes.ts`(타일 모양)
 - `src/game/` — `game.ts`(게임 루프·판정·실패/무적 모드·키 제한·과부하·멀티프레스·결과, `perfLine`/`diag`), `input.ts`(입력 이벤트 시각 그대로 보관), `settings.ts`
 - `src/audio/` — `engine.ts`(재생·디코딩 `decodeBytes`), 효과음, `wav.ts`(WAV 직접 읽기), `device.ts`(오디오 기기별 오프셋)
-- `src/ui/` — 화면들 (`select.ts` 레벨 선택: 자동 플레이·무적 모드, `play.ts` 플레이·결과 화면·프레임 표시, `calibrate.ts` 보정, `offsetUi.ts`, `settings.ts`)
+- `src/ui/` — 화면들 (`select.ts` 레벨 선택: 자동 플레이·무적 모드, `play.ts` 플레이·결과 화면·프레임 표시·진행 정보 오버레이, `hitmeter.ts` 판정 계기판, `calibrate.ts` 보정, `offsetUi.ts`, `settings.ts`)
 - `src/editor/` — 레벨 에디터 (`schema.ts` = 이벤트 입력 칸 정의 — 새 액션을 만들면 여기에도 넣어야 tsc가 통과)
 - `src/online/` — Firebase 로그인·업로드·순위·설정 동기화. `src/diag.ts` — 탭 꺼짐 진단.
 - `scripts/` — 시험·빌드 도구 (3절). `tests/` — Vitest.
@@ -165,7 +165,8 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 
 ## 7. 제작 과정 (PR 요약, 최근 → 과거)
 
-**원작 레벨 재현 · 원작 규칙 (#71~#94)**
+**원작 레벨 재현 · 원작 규칙 (#71~#95)**
+- #95 플레이 오버레이 (설정에서 켜고 끔, 기본 켜짐): '진행 정보'(진행도·정확도·절대 정확도·콤보·현재/남은/총 타일 수·음악 시간 — 사용자가 보낸 원작 Overlayer 화면처럼, 0.1초마다 `GameHud.setStats`), '판정 계기판'(가로 막대: 왼쪽 빠름·오른쪽 느림, 판정 구간 경계는 `meterPos`/`METER_ZONES`로 늘 같은 자리, 눈금 3초 동안 흐려짐, 평균 화살표, 아래 판정 수 7개). `PlayStats.counts()` 캐시(매 프레임 정확도 계산이 긴 곡에서 전체를 세던 것)·`combo`.
 - #94 시작 카운트다운(3·2·1) 중 입력 무시 (첫 타격 판정 창 전 누르기는 너무 빠름·과부하·키 제한에 안 넣음)
 - #93 선명함·성능: 필터 층은 늘 화면 해상도(흐림 단계만 1/2~1/8 해상도), 자동 화질 되돌리기, 장식 그림 빠른 고해상도 다시 올리기, lowgpu 사흘만, 뒤 버퍼는 섞기 모드 레벨에서만 (사용자 태블릿 Phantigma 녹화: 타일·배경이 뿌옇고 뭉개짐)
 - #92 등장 전 타일의 불투명도 이동은 0에서 시작 (Cardboard 마지막 마법진에 지난 마법진처럼 보이던 겹침)
@@ -218,6 +219,7 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 - QuomodocunquizE: 3:05 근처 회색은 맵의 11% 흰 번쩍임(의도된 것).
 
 ### 미구현 원작 기능
+- 원작 정확도(Accuracy)는 100%를 넘는다 (사용자 화면 104.07%, 그때 절대 정확도 99.19%) — 완벽마다 덧붙는 보너스로 보이나 공식 확인 못 함 (한 자료: '최대 100% + 클릭 수 × 0.01%', 사용자 숫자와 안 맞음). 우리 정확도는 100%가 최대.
 - 필터 SuperComputer(QuomodocunquizE에 한 번), Vision 계열 일부, 레거시 LightWater·OilPaint는 비슷한 효과로 대체(Waves·Posterize).
 - SetHitsound 게임 소리, 홀드 소리, 조건 연출로 부른 PlaySound의 소리, MultiPlanet 4개 이상, FreeRoam.
 

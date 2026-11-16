@@ -92,6 +92,12 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--warm); }
 .hud .progress { height: 6px; background: rgba(255,255,255,.12); border-radius: 3px; overflow: hidden; }
 .hud .progress > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--warm), var(--cool)); }
 .hud .acc { margin-top: 6px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hud .stats { margin-top: 8px; font-size: 15px; line-height: 1.5; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 2px #000; }
+.hud .stats .k { opacity: .85; }
+.hud .meter { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); width: min(380px, 62vw); display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+.hud .meter-bar { width: 100%; height: 26px; display: block; }
+.hud .meter-counts { display: flex; justify-content: center; gap: 10px; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgba(0,0,0,.95); }
+@media (max-width: 560px), (max-height: 420px) { .hud .stats { font-size: 12px; line-height: 1.4; } .hud .meter-counts { font-size: 11px; gap: 7px; } }
 .hud .tr { position: absolute; top: 12px; right: 14px; pointer-events: auto; display: flex; gap: 8px; }
 .hud .count { position: absolute; top: 38%; left: 0; right: 0; text-align: center; font-size: 96px; font-weight: 900; opacity: .9; text-shadow: 0 0 30px rgba(0,0,0,.6); }
 .hud .auto-badge { position: absolute; bottom: 14px; left: 16px; font-size: 13px; color: var(--cool); }

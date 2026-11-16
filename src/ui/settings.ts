@@ -53,7 +53,7 @@ export class SettingsScreen implements Screen {
       });
       return h('div', { class: 'row' }, h('div', { style: 'width:120px' }, inp), h('span', { class: 'dim' }, 'ms'));
     };
-    const toggle = (k: keyof Pick<UserSettings, 'reduceEffects' | 'showJudgeText' | 'autoHitSound' | 'beatPulse' | 'fitWide' | 'fullscreen' | 'lockAspect' | 'trackOutline' | 'showFps'>) =>
+    const toggle = (k: keyof Pick<UserSettings, 'reduceEffects' | 'showJudgeText' | 'autoHitSound' | 'beatPulse' | 'fitWide' | 'fullscreen' | 'lockAspect' | 'trackOutline' | 'showFps' | 'showStats' | 'showHitMeter'>) =>
       h('input', {
         type: 'checkbox',
         checked: settings[k],
@@ -127,6 +127,10 @@ export class SettingsScreen implements Screen {
             h('label', { class: 'row' }, toggle('fullscreen'), h('span', { class: 'dim' }, '휴대폰·태블릿에서 플레이할 때 주소창과 아래 버튼을 숨겨 화면을 꽉 채움')),
             h('label', null, '효과 줄이기'),
             h('label', { class: 'row' }, toggle('reduceEffects'), h('span', { class: 'dim' }, '플래시·흔들림·화면 회전·잡음·글리치 끄기 (폰이 느리면 켜세요)')),
+            h('label', null, '진행 정보'),
+            h('label', { class: 'row' }, toggle('showStats'), h('span', { class: 'dim' }, '플레이 중 왼쪽 위에 진행도·정확도·절대 정확도·콤보·현재/남은/총 타일 수·음악 시간')),
+            h('label', null, '판정 계기판'),
+            h('label', { class: 'row' }, toggle('showHitMeter'), h('span', { class: 'dim' }, '화면 아래에 친 타이밍 눈금(왼쪽 = 빠름, 오른쪽 = 느림)과 판정별 개수')),
             h('label', null, '프레임 표시'),
             h('label', { class: 'row' }, toggle('showFps'), h('span', { class: 'dim' }, '플레이 중 왼쪽 아래에 초당 프레임(FPS)·계산·그리기 시간 표시 — 어느 장면이 느린지 볼 때')),
           ),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adofaiWindows, DIFFICULTY_MULT, judgeError, judgeWindows, OverloadTracker } from '../src/core/judge';
+import { adofaiWindows, DIFFICULTY_MULT, judgeError, judgeWindows, METER_ZONES, meterPos, OverloadTracker } from '../src/core/judge';
 import { PlayStats } from '../src/core/stats';
 
 const w = judgeWindows(500); // 120bpm: 상한 125ms → 기본 창 그대로
@@ -180,5 +180,23 @@ describe('원작(ADOFAI) 판정 창', () => {
     expect(adofaiWindows(50, 'lenient').far).toBe(91);
     const m = adofaiWindows(50, 'normal', true);
     expect([m.perfect, m.near, m.far]).toEqual([50, 70, 90]);
+  });
+
+  it('판정 계기판 위치: 구간 경계가 늘 같은 자리 (빠름 음수, 느림 양수)', () => {
+    const a = adofaiWindows(500, 'normal'); // 120bpm: 완벽 ±83, 약간 ±125, 빠름/느림 ±167ms
+    expect(meterPos(0, a)).toBe(0);
+    expect(meterPos(-a.perfect, a)).toBeCloseTo(-METER_ZONES.perfect);
+    expect(meterPos(a.near, a)).toBeCloseTo(METER_ZONES.near);
+    expect(meterPos(-a.far, a)).toBeCloseTo(-METER_ZONES.far);
+    expect(meterPos(a.far * 5, a)).toBe(1);
+    expect(meterPos(-a.far * 5, a)).toBe(-1);
+    // 판정과 같은 구간에 놓인다
+    for (const e of [-160, -100, -40, 0, 40, 100, 160]) {
+      const j = judgeError(e, a, Infinity)!;
+      const p = Math.abs(meterPos(e, a));
+      if (j === 'perfect') expect(p).toBeLessThanOrEqual(METER_ZONES.perfect);
+      else if (j === 'earlyPerfect' || j === 'latePerfect') expect(p).toBeLessThanOrEqual(METER_ZONES.near);
+      else expect(p).toBeLessThanOrEqual(METER_ZONES.far);
+    }
   });
 });

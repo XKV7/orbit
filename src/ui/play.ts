@@ -1,6 +1,7 @@
 import { done, step } from '../diag';
 import { JUDGE_LABEL, type Judgment } from '../core/judge';
-import { Game, type GameHud, type GameResult } from '../game/game';
+import { Game, type GameHud, type GameResult, type LiveStats } from '../game/game';
+import { fmtTime, HitMeter } from './hitmeter';
 import { settings, submitBest } from '../game/settings';
 import { offsetNudger, offsetSuggestion } from './offsetUi';
 import type { OffsetHint } from '../core/offset';
@@ -46,6 +47,11 @@ export class PlayScreen implements Screen, GameHud {
   private lastAcc = '';
   private lastProg = -1;
   private lastCount: string | null = '';
+  /** 진행 정보 오버레이 (설정 '진행 정보') */
+  private statsEl: HTMLDivElement | null = null;
+  private lastStats = '';
+  /** 판정 계기판 (설정 '판정 계기판') */
+  private meter: HitMeter | null = null;
 
   constructor(
     private readonly pkg: LevelPackage,
@@ -75,11 +81,18 @@ export class PlayScreen implements Screen, GameHud {
       this.failMsg,
       h('p', null, '아무 키나 누르면 다시 시작 · Esc 나가기'),
     );
+    // 진행 정보를 켜면 한 줄 요약(진행·정확도·절대) 대신 여러 줄로
+    if (settings.showStats) {
+      this.statsEl = h('div', { class: 'stats' });
+      this.acc.style.display = 'none';
+    }
+    if (settings.showHitMeter) this.meter = new HitMeter();
     root.append(
       h(
         'div',
         { class: 'hud' },
-        h('div', { class: 'tl' }, h('div', { class: 'progress' }, this.prog), this.acc),
+        h('div', { class: 'tl' }, h('div', { class: 'progress' }, this.prog), this.acc, this.statsEl),
+        this.meter?.el ?? null,
         h(
           'div',
           { class: 'tr' },
@@ -108,7 +121,7 @@ export class PlayScreen implements Screen, GameHud {
     });
     // 프레임 표시 (설정)
     if (settings.showFps) {
-      const fb = h('div', { style: 'position:fixed;left:8px;bottom:34px;z-index:50;font:12px/1.3 monospace;color:#9f9;background:rgba(0,0,0,.6);padding:3px 7px;border-radius:5px;pointer-events:none' });
+      const fb = h('div', { style: `position:fixed;left:8px;bottom:${settings.showHitMeter ? 70 : 34}px;z-index:50;font:12px/1.3 monospace;color:#9f9;background:rgba(0,0,0,.6);padding:3px 7px;border-radius:5px;pointer-events:none` });
       root.append(fb);
       const iv = setInterval(() => {
         if (!this.game || !fb.isConnected) {
@@ -146,6 +159,8 @@ export class PlayScreen implements Screen, GameHud {
 
   exit(): void {
     done();
+    this.meter?.destroy();
+    this.meter = null;
     this.game?.destroy();
     this.game = null;
   }
@@ -173,6 +188,27 @@ export class PlayScreen implements Screen, GameHud {
     if (s === this.lastAcc) return;
     this.lastAcc = s;
     this.acc.textContent = s;
+  }
+  setStats(s: LiveStats): void {
+    this.meter?.setCounts(s.counts);
+    if (!this.statsEl) return;
+    const rows: [string, string][] = [
+      ['진행도', `${s.progress.toFixed(2)}%`],
+      ['정확도', `${s.accuracy.toFixed(2)}%`],
+      ['절대 정확도', `${s.xAccuracy.toFixed(2)}%`],
+      ['콤보', String(s.combo)],
+      ['현재 타일', `${s.tile}개`],
+      ['남은 타일 수', `${Math.max(0, s.total - s.tile)}개`],
+      ['총 타일 수', `${s.total}개`],
+      ['음악 시간', `${fmtTime(s.time)} / ${fmtTime(s.length)}`],
+    ];
+    const key = rows.map((r) => r[1]).join('|');
+    if (key === this.lastStats) return;
+    this.lastStats = key;
+    this.statsEl.replaceChildren(...rows.map(([k, v]) => h('div', null, h('span', { class: 'k' }, `${k}: `), v)));
+  }
+  hit(j: Judgment, pos: number): void {
+    this.meter?.hit(j, pos);
   }
   setCountdown(text: string | null): void {
     if (text === this.lastCount) return;

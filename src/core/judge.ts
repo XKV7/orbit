@@ -75,6 +75,26 @@ export function judgeError(e: number, w: Windows, tooEarlyLimitMs: number): Judg
   return null;
 }
 
+/** 판정 계기판에서 구간 경계의 위치 (가운데 0 ~ 끝 1): 완벽 · 약간 빠름/느림 · 빠름/느림 · 그 너머(너무 빠름/놓침) */
+export const METER_ZONES = { perfect: 0.25, near: 0.45, far: 0.7 } as const;
+
+/**
+ * 판정 계기판 위치 (-1 빠름 … 0 정확 … +1 느림). 판정 구간 경계가 늘 같은 자리에 오도록 구간마다 늘인다
+ * (곡 속도가 바뀌어 판정 창이 넓어지거나 좁아져도 색 띠는 그대로).
+ */
+export function meterPos(e: number, w: Windows): number {
+  const a = Math.abs(e);
+  const s = e < 0 ? -1 : 1;
+  const lerp = (x: number, x0: number, x1: number, y0: number, y1: number) => y0 + ((x - x0) / Math.max(1e-6, x1 - x0)) * (y1 - y0);
+  const far = w.grace ?? w.far;
+  let p: number;
+  if (a <= w.perfect) p = lerp(a, 0, w.perfect, 0, METER_ZONES.perfect);
+  else if (a <= w.near) p = lerp(a, w.perfect, w.near, METER_ZONES.perfect, METER_ZONES.near);
+  else if (a <= far) p = lerp(a, w.near, far, METER_ZONES.near, METER_ZONES.far);
+  else p = Math.min(1, lerp(a, far, far * 2, METER_ZONES.far, 1));
+  return s * p;
+}
+
 /** 진행하는 판정인가 (너무 빠름·놓침 제외). */
 export function advances(j: Judgment): j is HitJudgment {
   return j !== 'tooEarly' && j !== 'miss';
