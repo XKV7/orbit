@@ -15,20 +15,22 @@ function shaped() {
 }
 
 describe('박자 맞추기 (마법진)', () => {
-  it('범위 안 타일이 모두 같은 간격으로 쳐진다', () => {
+  it('n번부터 m번 타일까지 치는 순간이 모두 같은 간격', () => {
     const lv = shaped();
-    const r = fitRhythm(lv, 1, 7, 0.5);
+    const r = fitRhythm(lv, 1, 8, 0.5);
     expect(validateLevel(JSON.parse(JSON.stringify(r.level))).ok).toBe(true);
     expect(r.baseBpm).toBe(120);
     const ch = compileChart(r.level);
     // 반 박 = 0.25초 (120 BPM)
     for (let i = 1; i <= 7; i++) expect(ch.tiles[i + 1].time - ch.tiles[i].time).toBeCloseTo(0.25, 6);
+    // 0번 → 1번은 그대로
+    expect(ch.tiles[1].time - ch.tiles[0].time).toBeCloseTo(compileChart(lv).tiles[1].time - compileChart(lv).tiles[0].time, 6);
   });
 
   it('범위 뒤 박자는 그대로 (원래 BPM으로 돌아온다)', () => {
     const lv = shaped();
     const before = compileChart(lv);
-    const r = fitRhythm(lv, 1, 7, 0.5);
+    const r = fitRhythm(lv, 1, 8, 0.5);
     const ch = compileChart(r.level);
     // 범위 뒤 타일 간격은 원래와 같다
     for (let i = 8; i < before.finish; i++) expect(ch.tiles[i + 1].time - ch.tiles[i].time).toBeCloseTo(before.tiles[i + 1].time - before.tiles[i].time, 6);
@@ -40,7 +42,7 @@ describe('박자 맞추기 (마법진)', () => {
     // 3번을 미드스핀으로 (회전 0)
     lv.path[3] = (lv.path[2] + 180) % 360;
     lv.actions.push({ floor: 3, type: 'Midspin' });
-    const r = fitRhythm(lv, 1, 6, 1, 90);
+    const r = fitRhythm(lv, 1, 7, 1, 90);
     expect(r.skipped).toBe(1);
     expect(r.baseBpm).toBe(90);
     const ch = compileChart(r.level);
@@ -58,12 +60,28 @@ describe('박자 맞추기 (마법진)', () => {
     lv.actions.push({ floor: 3, type: 'SetSpeed', bpm: 200 });
     lv.actions.push({ floor: 8, type: 'SetSpeed', multiplier: 0.5 });
     const before = compileChart(lv);
-    const r = fitRhythm(lv, 1, 7, 0.5, 120);
+    const r = fitRhythm(lv, 1, 8, 0.5, 120);
     const sp = r.level.actions.filter((a) => a.type === 'SetSpeed' && a.floor === 8);
     expect(sp).toHaveLength(1);
     expect(sp[0]).toMatchObject({ bpm: before.tiles[8].bpm });
     const ch = compileChart(r.level);
     expect(ch.tiles[8].bpm).toBeCloseTo(before.tiles[8].bpm);
+  });
+});
+
+describe('정박 맞추기: 기준 BPM', () => {
+  it('비우면 범위 안 속도 바꾸기를 뺀 시작 타일 BPM — 같은 범위에 다시 눌러도 같다', () => {
+    const lv = shaped();
+    lv.actions.push({ floor: 0, type: 'SetSpeed', bpm: 150 });
+    const r1 = fitRhythm(lv, 1, 8, 1);
+    expect(r1.baseBpm).toBe(150);
+    const r2 = fitRhythm(r1.level, 1, 8, 1);
+    expect(r2.baseBpm).toBe(150);
+    const a = compileChart(r1.level);
+    const b = compileChart(r2.level);
+    for (let i = 0; i < a.finish; i++) expect(b.tiles[i + 1].time).toBeCloseTo(a.tiles[i + 1].time, 9);
+    // 한 타일 = 1박 (150 BPM)
+    for (let i = 1; i <= 7; i++) expect(a.tiles[i + 1].time - a.tiles[i].time).toBeCloseTo(0.4, 6);
   });
 });
 
