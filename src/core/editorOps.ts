@@ -151,23 +151,23 @@ export interface FitRhythmResult {
 }
 
 /**
- * 박자 맞추기 (마법진): from~to 타일이 모두 targetBeats 박 간격(기준 BPM으로)에 맞게 타일마다 BPM을 정한다.
- * 마법진처럼 모양을 만들려고 각도를 바꾸면 타일마다 박 수(회전각/180)가 달라지는데, 그만큼 BPM을 바꿔 들리는 박자는 그대로 둔다:
- *   BPM_i = 기준 BPM × (그 타일의 박 수) ÷ (목표 박 수 + 그 타일의 쉼·홀드 박 수)
- * - 범위 안의 속도 바꾸기(SetSpeed)는 지우고 새로 넣는다.
- * - 범위 바로 뒤 타일에는 원래 그 자리의 BPM을 다시 넣어 뒤쪽 박자는 바뀌지 않는다 (이미 속도 바꾸기가 있으면 그대로).
- * - 회전이 0인 타일(미드스핀)·마지막 타일은 건너뛴다.
- * baseBpm을 비우면 범위에 들어가기 직전의 BPM.
+ * 정박 맞추기 (마법진): from번 타일부터 to번 타일까지, 치는 순간이 모두 정박(기준 BPM의 targetBeats 박 간격)에 오게
+ * 타일마다 BPM을 정한다 — 원작 에디터 가이드의 'magic shape': 각도가 제각각인 모양을 180° 직선을 정박으로 치는 것처럼.
+ *   BPM_i = 기준 BPM × (그 타일의 박 수 = 회전각/180) ÷ 목표 박 수   (쉼·홀드 박이 있으면 양쪽에 더한다)
+ * - from~to-1 타일(=from에서 to까지 가는 구간)의 속도 바꾸기(SetSpeed)는 지우고 새로 넣는다.
+ * - to번 타일에는 원래 그 자리의 BPM을 다시 넣어 뒤쪽 박자는 바뀌지 않는다 (이미 BPM 속도 바꾸기가 있으면 그대로).
+ * - 회전이 0인 타일(미드스핀)은 건너뛴다 (앞뒤를 합쳐 한 박).
+ * baseBpm을 비우면 범위 안 속도 바꾸기를 뺐을 때 from번 타일의 BPM (같은 범위에 다시 눌러도 결과가 같다).
  */
 export function fitRhythm(level: LevelData, from: number, to: number, targetBeats: number, baseBpm?: number): FitRhythmResult {
   const before = compileChart(level);
   const last = before.finish;
   const a = Math.max(0, Math.min(from, to));
-  const b = Math.min(last - 1, Math.max(from, to));
-  const base = baseBpm && baseBpm > 0 ? baseBpm : a > 0 ? before.tiles[a - 1].bpm : level.settings.bpm;
-  if (!(targetBeats > 0) || b < a) return { level, changed: 0, skipped: 0, baseBpm: base };
+  const b = Math.min(last, Math.max(from, to)) - 1;
   const lv = cloneLevel(level);
   lv.actions = lv.actions.filter((x) => !(x.type === 'SetSpeed' && x.floor >= a && x.floor <= b));
+  const base = baseBpm && baseBpm > 0 ? baseBpm : (compileChart(lv).tiles[a]?.bpm ?? level.settings.bpm);
+  if (!(targetBeats > 0) || b < a) return { level, changed: 0, skipped: 0, baseBpm: base };
   let changed = 0;
   let skipped = 0;
   for (let i = a; i <= b; i++) {

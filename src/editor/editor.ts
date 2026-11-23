@@ -1551,21 +1551,22 @@ export class EditorScreen implements Screen {
       );
     const beats = h('select', { onchange: () => (this.fitBeats = Number(beats.value) || 1) });
     for (const [v, label] of [
+      [1, '정박 (1박)'],
       [2, '2박'],
-      [1, '1박'],
       [1 / 2, '1/2박'],
       [1 / 3, '1/3박'],
       [1 / 4, '1/4박'],
       [1 / 6, '1/6박'],
       [1 / 8, '1/8박'],
     ] as const)
-      beats.append(h('option', { value: String(v) }, `한 타일 = ${label}`));
+      beats.append(h('option', { value: String(v) }, `타일 간격 ${label}`));
     beats.value = String(this.fitBeats);
     const bpm = h('input', {
       type: 'number',
       min: 0,
       value: this.fitBpm || '',
-      placeholder: '직전 BPM',
+      placeholder: '자동 BPM',
+      title: '비우면 n번 타일의 원래 BPM (이 범위 속도 변경을 뺀 값)',
       style: 'width:7.5em',
       onchange: () => (this.fitBpm = Math.max(0, Number(bpm.value) || 0)),
     });
@@ -1573,24 +1574,24 @@ export class EditorScreen implements Screen {
       'button',
       {
         class: 'btn small primary',
-        title: '범위 안 타일마다 BPM을 정해, 각도가 달라도 모든 타일이 고른 박자로 쳐지게 해요 (Ctrl+Z로 되돌리기)',
+        title: 'n번부터 m번 타일까지 타일마다 속도 변경(BPM)을 넣어, 각도가 제각각이어도 곧은 길을 정박으로 치듯 쳐지게 해요 (Ctrl+Z로 되돌리기)',
         onclick: () => {
           const a = this.fitFrom ?? this.sel;
-          const b = this.fitTo ?? this.chart.finish - 1;
+          const b = this.fitTo ?? this.chart.finish;
           const r = fitRhythm(this.level, a, b, this.fitBeats, this.fitBpm || undefined);
           if (r.changed === 0) {
-            toast('맞출 타일이 없어요 — 시작·끝 타일 번호를 확인해 주세요', 3500);
+            toast('맞출 타일이 없어요 — n·m 타일 번호를 확인해 주세요', 3500);
             return;
           }
           this.commit(r.level);
           const label = beats.selectedOptions[0]?.textContent ?? '';
           toast(
-            `타일 ${Math.min(a, b)}~${Math.max(a, b)}: ${r.changed}개 타일의 BPM을 맞췄어요 (기준 ${+r.baseBpm.toFixed(3)} BPM, ${label}${r.skipped ? ` · 미드스핀 ${r.skipped}개 건너뜀` : ''}) — 되돌리기 Ctrl+Z`,
+            `타일 ${Math.min(a, b)}~${Math.max(a, b)} 정박: ${r.changed}개 타일에 속도 변경을 넣었어요 (기준 ${+r.baseBpm.toFixed(3)} BPM, ${label}${r.skipped ? ` · 미드스핀 ${r.skipped}개 건너뜀` : ''}) — 되돌리기 Ctrl+Z`,
             5000,
           );
         },
       },
-      '박자 맞추기',
+      '정박 맞추기',
     );
     const keep = h('input', {
       type: 'checkbox',
@@ -1612,10 +1613,10 @@ export class EditorScreen implements Screen {
         keep,
         h('span', { class: 'dim' }, '각도를 바꿔도 박자 그대로 (속도 변경 자동)'),
       ),
-      h('label', { title: '마법진처럼 각도를 바꿔도 박자는 고르게 — 타일마다 속도 변경(BPM)을 자동으로 넣어요' }, '박자 맞추기'),
-      h('div', { class: 'row', style: 'flex-wrap:wrap;gap:4px' }, h('span', { class: 'dim' }, '시작'), from, pick('from')),
+      h('label', { title: '마법진: n번 타일부터 m번 타일까지 치는 순간이 모두 정박에 오게 — 타일마다 속도 변경(BPM)을 자동으로 넣어요' }, '마법진 정박'),
+      h('div', { class: 'row', style: 'flex-wrap:wrap;gap:4px' }, h('span', { class: 'dim' }, 'n번 타일부터'), from, pick('from')),
       h('label', null, ''),
-      h('div', { class: 'row', style: 'flex-wrap:wrap;gap:4px' }, h('span', { class: 'dim' }, '끝'), to, pick('to')),
+      h('div', { class: 'row', style: 'flex-wrap:wrap;gap:4px' }, h('span', { class: 'dim' }, 'm번 타일까지'), to, pick('to')),
       h('label', null, ''),
       h('div', { class: 'row', style: 'flex-wrap:wrap;gap:4px' }, beats, bpm),
       h('label', null, ''),
