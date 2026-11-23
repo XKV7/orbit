@@ -102,8 +102,12 @@ const MAX_UPGRADING = MOBILE ? 2 : 3;
 const TEX_BUDGET = (LOW_GPU ? (MOBILE ? 128 : 384) : MOBILE ? (BIG_MOBILE ? 384 : 256) : 768) * 1024 * 1024;
 /** 예산 때문에 줄일 때도 이보다 작게는 줄이지 않는다 (긴 변, px) */
 const MIN_SIDE = 256;
-/** 이만큼(ms) 안 보인 그림은 GPU에서 내린다 (다시 보이면 새로 불러온다) */
+/** 이만큼(ms) 안 보인 그림은 GPU에서 내린다 (다시 보이면 새로 불러온다) — 미리 올리지 않은 그림만 */
 const UNLOAD_AFTER_MS = MOBILE ? 4000 : 20000;
+/** 미리 올리기: 전부 원본(최대 MAX_TEX)으로 올려도 예산의 이만큼 안이면 그대로 */
+const FULL_SHARE = 0.85;
+/** 그보다 크면 기본판을 예산의 이만큼 안으로 줄여 올리고, 나머지는 화면에서 크게 보일 때 키우는 데 쓴다 */
+const BASE_SHARE = 0.6;
 
 /** 불투명도 키 사이를 선형으로 (키가 없으면 1). */
 function alphaAt(keys: [number, number][] | undefined, t: number): number {
@@ -153,8 +157,30 @@ export class DecorationView {
   private readonly queue: string[] = [];
   private loading = 0;
   private lastSweep = 0;
-  /** 그림 불러오기 현황 (진단용) */
-  readonly stats = { loaded: 0, failed: 0, missing: 0, shrunk: 0, unloaded: 0, failedNames: [] as string[], missingNames: [] as string[] };
+  /** 그림 불러오기 현황 (진단용). cap: 미리 올릴 때 긴 변 상한 (0 = 미리 안 올림), upgraded: 지금 크게 다시 올린 그림 수 */
+  readonly stats = {
+    loaded: 0,
+    failed: 0,
+    missing: 0,
+    shrunk: 0,
+    unloaded: 0,
+    cap: 0,
+    preloadMs: 0,
+    upgraded: 0,
+    failedNames: [] as string[],
+    missingNames: [] as string[],
+  };
+  /** 이번 프레임에 보여야 하는데 그림이 아직 안 올라온 장식 수 (진단용) */
+  waiting = 0;
+  /** 장식 그림 예산 (MB, 진단용) */
+  readonly budgetMB = TEX_BUDGET / 1048576;
+  /**
+   * 시작 전에 미리 올린 기본판 (원작처럼 레벨의 모든 그림을 미리 들고 있는다). 끝까지 내리지 않고,
+   * 예산이 모자라면 크게 다시 올린 것만 이 기본판으로 되돌린다 — 그래서 그림이 비거나 늦게 뜨지 않는다.
+   */
+  private readonly base = new Map<string, Texture>();
+  /** 미리 올렸으면 시간이 지났다고 그림을 내리지 않는다 */
+  private preloaded = false;
   private lastTime: number | null = null;
   private destroyed = false;
   /** 가림막 장식들 (화면에 그리지 않고, 매 프레임 가림막 그림으로만 그린다) */
@@ -180,6 +206,8 @@ export class DecorationView {
     private readonly chart: Chart,
     private readonly tl: VisualTimeline,
     private readonly urlOf: (name: string) => string | null,
+    /** 그림 파일 머리말에서 읽은 크기 (해독 전, 미리 올릴 크기를 정하는 데) */
+    private readonly sizeOf: (name: string) => { w: number; h: number } | null = () => null,
   ) {
     this.behind.sortableChildren = true;
     this.front.sortableChildren = true;
@@ -270,6 +298,138 @@ export class DecorationView {
     return t;
   }
 
+  private renderer: Renderer | null = null;
+
+  /**
+   * 바로 GPU에 올린다 (처음 그릴 때 큰 그림을 올리느라 멈칫하지 않게). 줄여 그린 캔버스는 올린 뒤 비워
+   * 같은 그림이 메모리에 두 번(캔버스 + GPU) 남지 않게 한다 — 그래픽이 꺼졌다 켜지면 다시 못 올리지만, 그때는 어차피 새로고침해야 한다.
+   */
+  private upload(t: Texture): void {
+    if (!this.renderer) return;
+    try {
+      (this.renderer as unknown as { texture: { initSource(s: unknown): void } }).texture.initSource(t.source);
+    } catch {
+      return; // 처음 그릴 때 올라간다
+    }
+    const res = t.source.resource as unknown;
+    if (typeof HTMLCanvasElement !== 'undefined' && res instanceof HTMLCanvasElement) {
+      res.width = 0;
+      res.height = 0;
+    }
+  }
+
+  private markMissing(name: string): void {
+    this.tex.set(name, null);
+    this.stats.missing++;
+    if (this.stats.missingNames.length < 20) this.stats.missingNames.push(name);
+  }
+
+  private markFailed(name: string): void {
+    this.tex.set(name, null);
+    this.stats.failed++;
+    if (this.stats.failedNames.length < 20) this.stats.failedNames.push(name);
+  }
+
+  /** 레벨이 쓰는 장식 그림 이름 전부 (장식 정의 + 도중에 바꾸는 그림) */
+  imageNames(): string[] {
+    const s = new Set<string>();
+    for (const d of this.tl.decos) if (d.def.image) s.add(d.def.image);
+    for (const a of this.chart.level.actions) if (a.type === 'MoveDecorations' && a.image) s.add(a.image);
+    return [...s];
+  }
+
+  /**
+   * 시작 전에 레벨의 모든 장식 그림을 해독해 GPU에 올려 둔다 (원작처럼).
+   * 예전엔 처음 보일 때 불러와(늦게 뜸) 화면 크기만큼만 올리고(다가가면 흐림) 한동안 안 보이면 내려(다시 늦게 뜸)
+   * 사용자 기기에서 '그림이 늦게 뜨거나 흐리고, 갈수록 이상해진다'.
+   * 전부 원본으로 올려도 예산 안이면 원본 그대로, 넘치면 긴 변 상한을 정해 큰 그림만 줄여 기본판으로 올리고
+   * 화면에서 크게 보일 때 upgrade가 원본에서 다시 크게 올린다.
+   * renderer: 있으면 GPU에도 미리 올린다 (처음 그릴 때 멈칫하지 않게).
+   */
+  async preload(renderer: Renderer | null, onProgress?: (done: number, total: number) => void): Promise<void> {
+    const t0 = performance.now();
+    this.preloaded = true;
+    this.renderer = renderer;
+    const names = this.imageNames().filter((n) => !this.tex.has(n));
+    if (!names.length) return;
+    // 1) 크기: 파일 머리말에서 (모르면 그림을 불러와 잰다 — 해독은 아직)
+    const sizes = new Map<string, { w: number; h: number }>();
+    const urls = new Map<string, string>();
+    await Promise.all(
+      names.map(async (name) => {
+        const url = this.urlOf(name);
+        if (!url) return this.markMissing(name);
+        urls.set(name, url);
+        let sz = this.sizeOf(name);
+        if (!sz) {
+          const img = new Image();
+          img.src = url;
+          sz = await new Promise<{ w: number; h: number } | null>((res) => {
+            img.onload = () => res(img.naturalWidth ? { w: img.naturalWidth, h: img.naturalHeight } : null);
+            img.onerror = () => res(null);
+          });
+          img.src = '';
+        }
+        if (sz) sizes.set(name, sz);
+      }),
+    );
+    // 2) 긴 변 상한: 전부 원본이 예산의 FULL_SHARE 안이면 그대로, 아니면 BASE_SHARE 안에 들게
+    const bytesAt = (cap: number) => {
+      let sum = 0;
+      for (const { w, h } of sizes.values()) {
+        const side = Math.max(w, h);
+        const k = Math.min(1, MAX_TEX / side, Math.max(MIN_SIDE, cap) / side);
+        sum += w * h * 4 * k * k;
+      }
+      return sum;
+    };
+    let cap = MAX_TEX;
+    if (bytesAt(MAX_TEX) > TEX_BUDGET * FULL_SHARE) {
+      let lo = MIN_SIDE;
+      let hi = MAX_TEX;
+      while (hi - lo > 16) {
+        const mid = (lo + hi) / 2;
+        if (bytesAt(mid) <= TEX_BUDGET * BASE_SHARE) lo = mid;
+        else hi = mid;
+      }
+      cap = Math.floor(lo);
+    }
+    this.stats.cap = cap;
+    // 3) 해독 → 올리기 (몇 장씩 — 휴대폰에서 큰 그림 수십 장을 한꺼번에 풀면 메모리가 튄다)
+    const list = names.filter((n) => urls.has(n));
+    const total = list.length;
+    let done = 0;
+    onProgress?.(0, total);
+    let next = 0;
+    const worker = async () => {
+      while (next < list.length && !this.destroyed) {
+        const name = list[next++];
+        if (this.tex.has(name)) {
+          onProgress?.(++done, total);
+          continue;
+        }
+        const img = new Image();
+        img.src = urls.get(name)!;
+        try {
+          await decoded(img);
+          if (this.destroyed) return;
+          if (!this.tex.has(name)) {
+            const t = this.build(name, img, 0, 0, cap);
+            this.tex.set(name, t);
+            this.base.set(name, t);
+            this.stats.loaded++;
+            this.upload(t);
+          }
+        } catch {
+          this.markFailed(name);
+        }
+        onProgress?.(++done, total);
+      }
+    };
+    await Promise.all(Array.from({ length: MAX_LOADING }, worker));
+    this.stats.preloadMs = Math.round(performance.now() - t0);
+  }
+
   private texture(name: string): Texture | null {
     this.lastUsed.set(name, performance.now());
     const c = this.tex.get(name);
@@ -277,9 +437,7 @@ export class DecorationView {
     if (c !== undefined) return c;
     const url = this.urlOf(name);
     if (!url) {
-      this.tex.set(name, null);
-      this.stats.missing++;
-      if (this.stats.missingNames.length < 20) this.stats.missingNames.push(name);
+      this.markMissing(name);
       return null;
     }
     this.tex.set(name, 'loading');
@@ -308,9 +466,7 @@ export class DecorationView {
         done();
       };
       const fail = () => {
-        this.tex.set(name, null);
-        this.stats.failed++;
-        if (this.stats.failedNames.length < 20) this.stats.failedNames.push(name);
+        this.markFailed(name);
         done();
       };
       img.src = url;
@@ -323,14 +479,14 @@ export class DecorationView {
    * 해독한 그림을 GPU에 올린다. 화면에서 실제로 보이는 크기(needSide)만큼만 — 5000px 그림도 화면에 1500px로 보이면
    * 그 해상도면 원본과 똑같이 보인다. 그래픽 메모리 예산을 넘으면 안 보이는 그림부터 내리고, 그래도 모자라면 줄인다.
    */
-  private build(name: string, img: HTMLImageElement, minSide = 0, replacing = 0): Texture {
+  private build(name: string, img: HTMLImageElement, minSide = 0, replacing = 0, maxSide = Infinity): Texture {
     const w = img.naturalWidth;
     const h = img.naturalHeight;
     const side = Math.max(w, h, 1);
     this.nativeSide.set(name, side);
     const need = this.needSide.get(name);
     const target = Math.max(minSide, need !== undefined ? need * 1.15 : side, MIN_SIDE);
-    let k = Math.min(1, MAX_TEX / side, target / side);
+    let k = Math.min(1, MAX_TEX / side, target / side, Math.max(MIN_SIDE, maxSide) / side);
     const want = w * h * 4 * k * k;
     // replacing: 이 텍스처로 바꾸면 내려갈 예전 텍스처 크기 (자리로 친다)
     if (this.gpuBytes - replacing + want > TEX_BUDGET) this.evict(this.gpuBytes - replacing + want - TEX_BUDGET, performance.now());
@@ -395,12 +551,13 @@ export class DecorationView {
         }
       }
       if (!best || !bestCur) return;
-      // 자리: 새 텍스처 크기 - 지금 텍스처 크기. 모자라면 안 보이는 그림부터 내린다
+      // 자리: 새 텍스처 크기 - 지금 텍스처 크기 (기본판은 그대로 두므로 빼지 않는다). 모자라면 안 보이는 그림부터 내린다
       const curBytes = this.texBytes.get(bestCur) ?? 0;
-      const extra = curBytes * bestRatio * bestRatio - curBytes;
+      const freed = this.base.get(best) === bestCur ? 0 : curBytes;
+      const extra = curBytes * bestRatio * bestRatio - freed;
       if (this.gpuBytes + extra > TEX_BUDGET) this.evict(this.gpuBytes + extra - TEX_BUDGET, now);
       // 그래도 지금보다 1.2배 넘게 키울 자리가 없으면 잠시 미룬다 (같은 크기로 다시 올리기만 반복하지 않게)
-      if (TEX_BUDGET - this.gpuBytes < curBytes * 0.44) {
+      if (TEX_BUDGET - this.gpuBytes < curBytes * 1.44 - freed) {
         this.upgradeHold.set(best, now);
         continue;
       }
@@ -419,16 +576,21 @@ export class DecorationView {
           this.upgrading.delete(name);
           const old = this.tex.get(name);
           if (this.destroyed || !old || old === 'loading') return;
-          this.swap(name, old, this.build(name, img, goal, this.texBytes.get(old) ?? 0));
+          const keep = this.base.get(name) === old;
+          const t = this.build(name, img, goal, keep ? 0 : (this.texBytes.get(old) ?? 0));
+          this.upload(t);
+          this.swap(name, old, t);
         },
         () => this.upgrading.delete(name),
       );
     }
   }
 
-  /** 같은 그림의 새 텍스처로 바꾸고 예전 것은 내린다 (장식은 다음 프레임에 새 텍스처를 받는다). */
+  /** 같은 그림의 새 텍스처로 바꾸고 예전 것은 내린다 — 예전 것이 기본판이면 두고 (장식은 다음 프레임에 새 텍스처를 받는다). */
   private swap(name: string, old: Texture, t: Texture): void {
     this.tex.set(name, t);
+    const b = this.base.get(name);
+    if (b) this.stats.upgraded += (t === b ? 0 : 1) - (old === b ? 0 : 1);
     for (const o of this.objs) {
       if (o.image === name && (o.node instanceof Sprite || o.node instanceof TilingSprite)) {
         o.node.texture = Texture.EMPTY;
@@ -443,6 +605,7 @@ export class DecorationView {
         for (const sp of o.ps.pool) if (sp.texture === old || (oldCells && oldCells.includes(sp.texture))) sp.texture = Texture.EMPTY;
       }
     }
+    if (old === b) return;
     this.texFactor.delete(old);
     this.gpuBytes -= this.texBytes.get(old) ?? 0;
     this.texBytes.delete(old);
@@ -461,7 +624,8 @@ export class DecorationView {
 
   /** 한동안 안 쓴 그림을 GPU에서 내린다 (그 그림을 쓰던 장식은 다시 보일 때 새로 불러온다). */
   private sweep(now: number): void {
-    if (now - this.lastSweep < 1000) return;
+    // 미리 올렸으면 시간으로는 내리지 않는다 (예산이 모자랄 때 evict가 크게 올린 것만 기본판으로 되돌린다)
+    if (this.preloaded || now - this.lastSweep < 1000) return;
     this.lastSweep = now;
     let dropped: Set<string> | null = null;
     for (const [name, t] of this.tex) {
@@ -472,11 +636,15 @@ export class DecorationView {
     if (dropped) this.drop(dropped);
   }
 
-  /** 예산을 넘을 때: 지금 화면에 안 쓰이는 그림을 오래된 것부터 need 바이트만큼 내린다. */
+  /**
+   * 예산을 넘을 때: 지금 화면에 안 쓰이는 그림을 오래된 것부터 need 바이트만큼 내린다.
+   * 기본판이 있는 그림은 기본판으로 되돌리기만 한다 (기본판은 내리지 않는다).
+   */
   private evict(need: number, now: number): void {
     const cand: [string, number, number][] = [];
     for (const [name, t] of this.tex) {
       if (!t || t === 'loading') continue;
+      if (this.base.get(name) === t) continue;
       const last = this.lastUsed.get(name) ?? 0;
       if (now - last < 500) continue; // 지금 보이는 그림은 두고
       cand.push([name, last, this.texBytes.get(t) ?? 0]);
@@ -486,7 +654,9 @@ export class DecorationView {
     let freed = 0;
     for (const [name, , b] of cand) {
       if (freed >= need) break;
-      out.add(name);
+      const base = this.base.get(name);
+      if (base) this.swap(name, this.tex.get(name) as Texture, base);
+      else out.add(name);
       freed += b;
     }
     if (out.size) this.drop(out);
@@ -538,6 +708,7 @@ export class DecorationView {
     const need = new Map<string, number>();
     const hidden = (window as unknown as { __orbitHide?: Set<string> }).__orbitHide;
     this.maskUsed = false;
+    let waiting = 0;
     const rc = degToRad(camRot);
     const cos = Math.cos(-rc);
     const sin = Math.sin(-rc);
@@ -587,7 +758,7 @@ export class DecorationView {
             node.height = t.height;
             node.tileScale.set(1 / (def.tile?.[0] ?? 1), 1 / (def.tile?.[1] ?? 1));
           }
-        }
+        } else if (this.tex.get(d.image) === 'loading') waiting++;
       }
       // 글자 바꾸기 (원작 SetText)
       if (node instanceof Text) {
@@ -677,6 +848,7 @@ export class DecorationView {
       }
     }
     for (const [k, v] of need) this.needSide.set(k, v);
+    this.waiting = waiting;
   }
 
   /** 입자 한 묶음 진행: 방출·이동·수명. */
@@ -842,5 +1014,6 @@ export class DecorationView {
     this.behind.destroy({ children: true });
     this.front.destroy({ children: true });
     for (const t of this.tex.values()) if (t && t !== 'loading') t.destroy(true);
+    for (const [name, t] of this.base) if (this.tex.get(name) !== t) t.destroy(true);
   }
 }

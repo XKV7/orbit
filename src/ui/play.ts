@@ -247,13 +247,48 @@ export class PlayScreen implements Screen, GameHud {
         // 박자가 어긋나면 여기서 바로 (친 타이밍으로 본 추천 + 미세조정)
         offsetSuggestion(g.offsetHint),
         offsetNudger(),
-        // 장식이 안 보일 때 원인을 바로 알 수 있게 (이 화면을 캡처하면 된다)
-        g.hasDecorations ? h('div', { class: 'dim', style: 'font-size:11px;line-height:1.5;white-space:pre-wrap;text-align:left;margin-top:8px;max-width:80vw' }, g.diag().join('\n')) : null,
+        // 화면이 이상할 때 원인을 알 수 있게: 누르면 지금 상태를 보여 준다 (캡처하거나 복사해서 보내면 된다)
+        this.diagButton(g),
       ),
     );
     this.root.append(this.pauseEl);
     (this.pauseEl.querySelector('button') as HTMLButtonElement).focus();
   }
+  /** '화면이 이상해요' — 지금 상태(그림·메모리·화질·기기)를 펼쳐 보여 주고 복사할 수 있게 */
+  private diagButton(g: Game): HTMLElement {
+    const text = g.diag().join('\n');
+    const pre = h('div', { class: 'diag-text' }, text);
+    const copy = h('button', { class: 'btn small' }, '복사') as HTMLButtonElement;
+    copy.onclick = () => {
+      void navigator.clipboard?.writeText(text).then(
+        () => (copy.textContent = '복사됨'),
+        () => (copy.textContent = '복사 실패 — 캡처해 주세요'),
+      );
+    };
+    const panel = h('div', { class: 'diag', style: 'display:none' }, h('div', { class: 'dim' }, '이 화면을 캡처하거나 복사해서 보내 주세요 (어느 장면에서 이상했는지도 함께)'), pre, copy);
+    const btn = h('button', { class: 'btn' }, '화면이 이상해요') as HTMLButtonElement;
+    btn.onclick = () => {
+      const open = panel.style.display === 'none';
+      panel.style.display = open ? '' : 'none';
+      btn.textContent = open ? '닫기' : '화면이 이상해요';
+    };
+    return h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, btn, panel);
+  }
+
+  private loadingEl: HTMLDivElement | null = null;
+  setLoading(text: string | null): void {
+    if (text === null) {
+      this.loadingEl?.remove();
+      this.loadingEl = null;
+      return;
+    }
+    if (!this.loadingEl) {
+      this.loadingEl = h('div', { class: 'loading-note' }) as HTMLDivElement;
+      this.root.append(this.loadingEl);
+    }
+    this.loadingEl.textContent = text;
+  }
+
   setResumeCountdown(n: number | null): void {
     this.setCountdown(n === null ? null : String(n));
   }

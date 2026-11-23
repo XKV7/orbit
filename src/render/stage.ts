@@ -2,6 +2,9 @@ import { Application, Container, Filter, Graphics, RenderTexture, Sprite, Textur
 import { TILE_LEN } from '../core/math';
 import { lowGpuRecently, markLowGpu } from './gpu';
 
+/** 배경 그림 최대 긴 변 (px, 넘으면 줄여 올린다 — 화면을 덮는 크기면 충분) */
+const BG_MAX_SIDE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? (lowGpuRecently() ? 2048 : 2560) : 4096;
+
 // 필터(흐림·색·왜곡·빛 번짐)는 기본이 1배 해상도라, 휴대폰(2배 화면)에서 필터가 켜지면 화면 전체가 절반 해상도로 뭉개졌다.
 // 화면 해상도를 따르게 한다 (필터를 만들기 전에).
 Filter.defaultOptions.resolution = 'inherit';
@@ -78,6 +81,12 @@ export class Stage {
   private bgImageUrl: string | null = null;
   private bgFit: 'cover' | 'contain' | 'unscaled' | 'tile' = 'cover';
   private bgTex: Texture | null = null;
+  /**
+   * 배경 그림 (주소 → 텍스처). 레벨 시작 전에 미리 올리고 레벨이 끝날 때 내린다.
+   * 예전엔 배경이 바뀔 때마다 새로 불러와 그동안 배경이 비었고(깜빡임), 예전 텍스처를 내리지 않아 그래픽 메모리가 쌓였다.
+   */
+  private readonly bgCache = new Map<string, Promise<Texture | null>>();
+  private readonly bgLoaded = new Map<string, Texture>();
   private bgVideoEl: HTMLVideoElement | null = null;
   private bgVideoSprite: Sprite | null = null;
   private bgVideoUrl: string | null = null;
@@ -208,29 +217,106 @@ export class Stage {
     if (url !== this.bgImageUrl || fit !== this.bgFit) {
       this.bgImageUrl = url;
       this.bgFit = fit;
-      if (this.bgSprite) {
-        this.bgSprite.destroy();
-        this.bgSprite = null;
-      }
-      this.bgTex = null;
-      if (url) {
-        const img = new Image();
-        img.onload = () => {
-          if (this.bgImageUrl !== url || this.bgFit !== fit) return;
-          const tex = Texture.from(img);
-          const s = fit === 'tile' ? new TilingSprite({ texture: tex, width: this.width, height: this.height }) : new Sprite(tex);
-          this.bgTex = tex;
-          this.bgSprite = s;
-          this.bg.addChildAt(s, 0);
-          this.layoutBg();
-        };
-        img.src = url;
-      }
+      const show = (tex: Texture | null) => {
+        if (this.bgImageUrl !== url || this.bgFit !== fit) return;
+        // 텍스처는 캐시가 들고 있으니 스프라이트만 내린다
+        if (this.bgSprite) {
+          this.bgSprite.destroy();
+          this.bgSprite = null;
+        }
+        this.bgTex = null;
+        if (!tex) return;
+        const s = fit === 'tile' ? new TilingSprite({ texture: tex, width: this.width, height: this.height }) : new Sprite(tex);
+        this.bgTex = tex;
+        this.bgSprite = s;
+        this.bg.addChildAt(s, 0);
+        this.layoutBg();
+        s.alpha = this.bgAlpha;
+        s.tint = this.bgTint;
+      };
+      const ready = url ? this.bgLoaded.get(url) : null;
+      // 미리 올려 둔 그림이면 바로, 아니면 불러오는 동안 예전 배경을 그대로 둔다 (비어 보이지 않게)
+      if (!url || ready) show(ready ?? null);
+      else void this.loadBackground(url).then(show);
     }
+    this.bgAlpha = opts.opacity ?? 0.55;
+    this.bgTint = opts.tint ?? 0xffffff;
     if (this.bgSprite) {
       this.bgSprite.alpha = opts.opacity ?? 0.55;
       this.bgSprite.tint = opts.tint ?? 0xffffff;
     }
+  }
+
+  private bgAlpha = 0.55;
+  private bgTint = 0xffffff;
+
+  /** 배경 그림을 불러와 GPU에 올린다 (같은 주소는 한 번만). 너무 크면 줄인다. */
+  loadBackground(url: string): Promise<Texture | null> {
+    let p = this.bgCache.get(url);
+    if (p) return p;
+    const gen = this.bgGen;
+    p = (async () => {
+      const img = new Image();
+      img.src = url;
+      try {
+        await img.decode();
+      } catch {
+        if (!img.complete || !img.naturalWidth) return null;
+      }
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const k = Math.min(1, BG_MAX_SIDE / Math.max(w, h, 1));
+      let tex: Texture;
+      if (k < 1) {
+        const cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(w * k));
+        cv.height = Math.max(1, Math.round(h * k));
+        const g = cv.getContext('2d');
+        if (g) {
+          g.imageSmoothingQuality = 'high';
+          g.drawImage(img, 0, 0, cv.width, cv.height);
+        }
+        tex = Texture.from(cv, true);
+        // 배치 계산은 원래 크기로 (unscaled = 원래 크기)
+        this.bgScale.set(tex, 1 / k);
+      } else tex = Texture.from(img, true);
+      // 그사이 레벨이 끝났으면 버린다
+      if (gen !== this.bgGen) {
+        tex.destroy(true);
+        return null;
+      }
+      try {
+        (this.app.renderer as unknown as { texture: { initSource(s: unknown): void } }).texture.initSource(tex.source);
+        // 줄여 그린 캔버스는 올린 뒤 비운다 (메모리에 두 번 남지 않게)
+        const res = tex.source.resource as unknown;
+        if (res instanceof HTMLCanvasElement) {
+          res.width = 0;
+          res.height = 0;
+        }
+      } catch {
+        /* 처음 그릴 때 올라간다 */
+      }
+      this.bgLoaded.set(url, tex);
+      return tex;
+    })();
+    this.bgCache.set(url, p);
+    return p;
+  }
+
+  /** 줄여서 올린 배경 그림: 원래 크기 / 올린 크기 */
+  private readonly bgScale = new Map<Texture, number>();
+
+  /** 레벨마다 하나씩 늘어남 (그사이 끝난 레벨의 불러오기는 버린다) */
+  private bgGen = 0;
+
+  /** 레벨이 끝날 때: 배경 그림을 모두 내린다 */
+  clearBackgrounds(): void {
+    this.bgGen++;
+    this.setBackgroundImage(null);
+    for (const t of this.bgLoaded.values()) t.destroy(true);
+    this.bgLoaded.clear();
+    this.bgCache.clear();
+    this.bgScale.clear();
   }
 
   /**
@@ -310,10 +396,11 @@ export class Stage {
     if (s instanceof TilingSprite) {
       s.width = this.width;
       s.height = this.height;
+      s.tileScale.set(this.bgScale.get(tex) ?? 1);
       return;
     }
     const k =
-      this.bgFit === 'unscaled' ? 1 : this.bgFit === 'contain' ? Math.min(this.width / tex.width, this.height / tex.height) : Math.max(this.width / tex.width, this.height / tex.height);
+      this.bgFit === 'unscaled' ? (this.bgScale.get(tex) ?? 1) : this.bgFit === 'contain' ? Math.min(this.width / tex.width, this.height / tex.height) : Math.max(this.width / tex.width, this.height / tex.height);
     s.scale.set(k);
     s.position.set((this.width - tex.width * k) / 2, (this.height - tex.height * k) / 2);
   }
