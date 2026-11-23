@@ -7,11 +7,13 @@ import { cameraCenter, VisualTimeline, type FilterState } from '../core/timeline
 import { deviceOffsetMs } from '../audio/device';
 import { audio } from '../audio/engine';
 import { Sfx } from '../audio/sfx';
-import { fileUrl, loadPackageAudio, type LevelPackage } from '../levels/package';
+import { fileUrl, findFile, loadPackageAudio, type LevelPackage } from '../levels/package';
 import { DecorationView } from '../render/decorations';
+import { imageSize } from '../render/imagesize';
 import { FxView } from '../render/fx';
 import { ScreenFx } from '../render/screenfx';
 import { COLOR_A, COLOR_B, PlanetsView } from '../render/planets';
+import { lowGpuRecently } from '../render/gpu';
 import { stage } from '../render/stage';
 import { TrackView } from '../render/track';
 import { InputCollector, type InputEvent } from './input';
@@ -53,6 +55,8 @@ export interface GameHud {
   setStats?(s: LiveStats): void;
   /** 판정 하나 (계기판 눈금): pos = -1 빠름 … 0 정확 … +1 느림 */
   hit?(j: Judgment, pos: number): void;
+  /** 시작 전 불러오기 표시 (null = 끝) */
+  setLoading?(text: string | null): void;
 }
 
 /** 플레이 중 진행 정보 (원작 오버레이처럼) */
@@ -249,12 +253,50 @@ export class Game {
     }
     stage.fitWide = settings.fitWide && this.fromAdofai;
     stage.setFrameAspect(settings.lockAspect && this.fromAdofai ? 16 / 9 : null);
+    const hud = this.opts.hud;
+    hud.setLoading?.('음악 불러오는 중…');
     this.buffer = await loadPackageAudio(this.opts.pkg);
     await this.eng.resume();
     this.track = new TrackView(this.chart, this.timeline, { outline: settings.trackOutline });
     this.planets = new PlanetsView(settings.trackOutline);
     this.fx = new FxView();
-    this.deco = new DecorationView(this.chart, this.timeline, (name) => fileUrl(this.opts.pkg, name));
+    const pkg = this.opts.pkg;
+    this.deco = new DecorationView(
+      this.chart,
+      this.timeline,
+      (name) => fileUrl(pkg, name),
+      (name) => {
+        const d = findFile(pkg.files, name);
+        return d ? imageSize(d) : null;
+      },
+    );
+    // 장식·배경 그림을 시작 전에 모두 올려 둔다 (원작처럼 — 처음 보일 때 불러오면 늦게 뜨거나 흐렸다)
+    const bgUrls = [...new Set(this.chart.level.actions.flatMap((a) => (a.type === 'Background' && a.image ? [a.image] : [])))]
+      .map((n) => fileUrl(pkg, n))
+      .filter((u): u is string => !!u);
+    let bgDone = 0;
+    let decoDone = 0;
+    let decoTotal = 0;
+    const show = () => {
+      const total = decoTotal + bgUrls.length;
+      if (total) hud.setLoading?.(`그림 불러오는 중… ${decoDone + bgDone} / ${total}`);
+    };
+    show();
+    await Promise.all([
+      this.deco.preload(stage.app.renderer, (d, t) => {
+        decoDone = d;
+        decoTotal = t;
+        show();
+      }),
+      ...bgUrls.map((u) =>
+        stage.loadBackground(u).then(() => {
+          bgDone++;
+          show();
+        }),
+      ),
+    ]);
+    hud.setLoading?.(null);
+    if (this.dead) return;
     this.screenFx = new ScreenFx();
     stage.clearWorld();
     // 배경 층에만 거는 필터가 있으면 트랙 뒤 장식을 배경 층으로 옮겨 따로 필터를 건다
@@ -277,7 +319,11 @@ export class Game {
     this.begin(this.startFloor, false);
   }
 
+  /** 불러오는 중에 나가면 시작하지 않는다 */
+  private dead = false;
+
   destroy(): void {
+    this.dead = true;
     stage.app.ticker.remove(this.tickerFn);
     stage.setBackBuffer(true); // 에디터·타이틀 화면은 그대로
 
@@ -303,7 +349,7 @@ export class Game {
     stage.setFrameAspect(null);
     stage.camera.shakeX = 0;
     stage.camera.shakeY = 0;
-    stage.setBackgroundImage(null);
+    stage.clearBackgrounds();
     stage.setBackgroundVideo(null);
   }
 
@@ -367,11 +413,6 @@ export class Game {
   }
 
   /** 진단 정보 (주소에 ?debug를 붙이면 화면에 표시). */
-  /** 장식이나 원작 변환 레벨인지 (일시정지 화면에 그림 현황을 보여줄지) */
-  get hasDecorations(): boolean {
-    return (this.chart.level.decorations?.length ?? 0) > 0 || !!this.opts.pkg.imported;
-  }
-
   /** 원작(얼음과 불의 춤)에서 온 레벨인지 — 변환 표시가 없어도 묶음에 .adofai가 있으면 */
   private get fromAdofai(): boolean {
     const p = this.opts.pkg;
@@ -401,11 +442,21 @@ export class Game {
     const adofais = [...this.opts.pkg.files.keys()].filter((n) => n.toLowerCase().endsWith('.adofai'));
     if (adofais.length) out.push(`원작 파일: ${this.opts.pkg.source ?? '?'} (묶음 안 .adofai ${adofais.length}개: ${adofais.slice(0, 4).join(', ')})`);
     if (st) {
-      out.push(`그림: 올림 ${st.loaded} · 줄임 ${st.shrunk} · 내림 ${st.unloaded} · 실패 ${st.failed} · 파일 없음 ${st.missing}`);
+      out.push(`그림: 올림 ${st.loaded} · 줄임 ${st.shrunk} · 크게 다시 ${st.upgraded} · 내림 ${st.unloaded} · 실패 ${st.failed} · 파일 없음 ${st.missing}`);
+      out.push(
+        `그림 메모리 ${this.deco.textureMB.toFixed(0)} / ${this.deco.budgetMB.toFixed(0)}MB · 기다리는 그림 ${this.deco.waiting} · 미리 올림 ${st.cap ? `긴 변 ${st.cap}px까지 (${(st.preloadMs / 1000).toFixed(1)}초)` : '안 함'}`,
+      );
       if (st.missingNames.length) out.push(`없는 파일: ${st.missingNames.slice(0, 6).join(', ')}`);
       if (st.failedNames.length) out.push(`실패한 파일: ${st.failedNames.slice(0, 6).join(', ')}`);
     }
     if (stage.contextLost) out.push('⚠ 그래픽 메모리 부족으로 화면이 꺼졌습니다 (새로고침 필요)');
+    if (lowGpuRecently()) out.push('최근 3일 안에 그래픽 메모리 부족 기록 있음 → 그림을 작게 올리는 중');
+    const nav = navigator as unknown as { deviceMemory?: number; hardwareConcurrency?: number };
+    out.push(
+      `기기 ${matchMedia('(pointer: coarse)').matches ? '터치' : 'PC'} · 메모리 ${nav.deviceMemory ?? '?'}GB · 코어 ${nav.hardwareConcurrency ?? '?'} · 화면 배율 ${window.devicePixelRatio} · ${screen.width}×${screen.height}`,
+    );
+    out.push(navigator.userAgent.replace(/Mozilla\/5\.0 |\(KHTML, like Gecko\) /g, '').slice(0, 140));
+    out.push(this.perfLine());
     out.push(`원작 비율 고정 ${settings.lockAspect && this.fromAdofai ? '켜짐 (16:9)' : '꺼짐'}`);
     out.push(`원작 화면 맞춤 ${stage.fitWide ? '켜짐' : settings.fitWide ? '꺼짐 (원작 맵이 아님)' : '꺼짐 (설정)'} · 화면 ${Math.round(stage.width)}×${Math.round(stage.height)}`);
     out.push(`화질 단계 ${stage.qualityLevel} (0 = 최고, 느리면 자동으로 낮춤) · 화면 해상도 ${stage.app.renderer.resolution}배`);
@@ -951,6 +1002,7 @@ export class Game {
       tiles: this.track.visibleCount,
       tileIds: (window as unknown as { __orbitTileIds?: boolean }).__orbitTileIds ? [...this.track.visibleSet] : undefined,
       texMB: Math.round(this.deco.textureMB),
+      img: { ...this.deco.stats, failedNames: undefined, missingNames: undefined, waiting: this.deco.waiting },
       frameMs: +this.frameCpu.toFixed(2),
       renderMs: +stage.renderMs.toFixed(2),
     };
