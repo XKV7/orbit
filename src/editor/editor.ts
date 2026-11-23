@@ -6,7 +6,9 @@ import {
   addAction,
   deleteTile,
   fillStraight,
+  fitRhythm,
   insertTileAfter,
+  keepTiming,
   truncateAfter,
   recordToAngles,
   removeAction,
@@ -144,6 +146,19 @@ export class EditorScreen implements Screen {
   private recOverwrite = false;
   private fillCount = 8;
   private fillBpm = 0;
+  /** 박자 맞추기 (마법진): 범위 (비우면 선택 타일 ~ 끝), 한 타일 박 수, 기준 BPM (0 = 범위 직전 BPM) */
+  private fitFrom: number | null = null;
+  private fitTo: number | null = null;
+  private fitBeats = 1;
+  private fitBpm = 0;
+  /** 각도를 바꿔도 박자 유지 (속도 바꾸기 자동) — 마법진 만들기 */
+  private keepRhythm = (() => {
+    try {
+      return localStorage.getItem('orbit.editor.keepRhythm') === '1';
+    } catch {
+      return false;
+    }
+  })();
   private drag: { x: number; y: number; cx: number; cy: number; moved: boolean } | null = null;
   private readonly eng = audio();
   private readonly sfx = new Sfx(this.eng);
@@ -366,7 +381,13 @@ export class EditorScreen implements Screen {
       toast('도착 타일은 방향이 없습니다. 앞 타일을 선택하세요.');
       return;
     }
-    this.commit(setOutAngle(this.level, this.sel, this.level.path[this.sel] + d));
+    this.setAngle(this.level.path[this.sel] + d);
+  }
+
+  /** 선택 타일의 나가는 각도 바꾸기 — '박자 유지'가 켜져 있으면 이 타일·다음 타일 길이가 그대로이게 속도 바꾸기를 넣는다 */
+  private setAngle(v: number): void {
+    const next = setOutAngle(this.level, this.sel, v);
+    this.commit(this.keepRhythm ? keepTiming(this.level, next, this.sel, this.sel + 1) : next);
   }
 
   /** 방향 패드 (터치 기기·좁은 화면은 기본으로 표시). */
@@ -649,7 +670,7 @@ export class EditorScreen implements Screen {
       e.preventDefault();
       if (this.sel >= this.level.path.length) return;
       const d = e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? 15 : -15;
-      this.commit(setOutAngle(this.level, this.sel, this.level.path[this.sel] + d));
+      this.setAngle(this.level.path[this.sel] + d);
       return;
     }
     if (e.code in KEY_ANGLES) {
@@ -1270,7 +1291,7 @@ export class EditorScreen implements Screen {
       disabled: isFinish,
       onchange: () => {
         const v = Number(angle.value);
-        if (Number.isFinite(v)) this.commit(setOutAngle(this.level, this.sel, v));
+        if (Number.isFinite(v)) this.setAngle(v);
       },
     });
     const events = this.level.actions
@@ -1493,12 +1514,113 @@ export class EditorScreen implements Screen {
           },
           '1박 직진 타일 채우기',
         ),
+        ...this.fitRhythmRows(),
         h('label', null, '자동 플레이'),
         h('label', { class: 'row' }, auto, h('span', { class: 'dim' }, '플레이테스트에 적용')),
         h('label', null, '무적 모드'),
         h('label', { class: 'row', title: '실패하지 않고 끝까지 — 끝나면 판정별 횟수와 절대정확도가 나와요' }, noFail, h('span', { class: 'dim' }, '플레이테스트에 적용')),
       ),
     );
+  }
+
+  /**
+   * 박자 맞추기 (마법진): 모양을 만들려고 각도를 바꿔도 들리는 박자가 그대로이게 타일마다 BPM을 정한다.
+   * 범위는 '선택 타일로' 버튼으로 시작·끝을 찍는다 (비우면 선택 타일부터 끝까지).
+   */
+  private fitRhythmRows(): HTMLElement[] {
+    const intOrNull = (v: string) => (v.trim() === '' || !Number.isFinite(Number(v)) ? null : Math.max(0, Math.round(Number(v))));
+    const from = h('input', { type: 'number', min: 0, value: this.fitFrom ?? '', placeholder: '선택', style: 'width:6.5em', onchange: () => (this.fitFrom = intOrNull(from.value)) });
+    const to = h('input', { type: 'number', min: 0, value: this.fitTo ?? '', placeholder: '끝까지', style: 'width:6.5em', onchange: () => (this.fitTo = intOrNull(to.value)) });
+    const pick = (which: 'from' | 'to') =>
+      h(
+        'button',
+        {
+          class: 'btn small',
+          title: '지금 선택한 타일 번호를 넣어요',
+          onclick: () => {
+            if (which === 'from') {
+              this.fitFrom = this.sel;
+              from.value = String(this.sel);
+            } else {
+              this.fitTo = this.sel;
+              to.value = String(this.sel);
+            }
+          },
+        },
+        '선택 타일로',
+      );
+    const beats = h('select', { onchange: () => (this.fitBeats = Number(beats.value) || 1) });
+    for (const [v, label] of [
+      [2, '2박'],
+      [1, '1박'],
+      [1 / 2, '1/2박'],
+      [1 / 3, '1/3박'],
+      [1 / 4, '1/4박'],
+      [1 / 6, '1/6박'],
+      [1 / 8, '1/8박'],
+    ] as const)
+      beats.append(h('option', { value: String(v) }, `한 타일 = ${label}`));
+    beats.value = String(this.fitBeats);
+    const bpm = h('input', {
+      type: 'number',
+      min: 0,
+      value: this.fitBpm || '',
+      placeholder: '직전 BPM',
+      style: 'width:7.5em',
+      onchange: () => (this.fitBpm = Math.max(0, Number(bpm.value) || 0)),
+    });
+    const run = h(
+      'button',
+      {
+        class: 'btn small primary',
+        title: '범위 안 타일마다 BPM을 정해, 각도가 달라도 모든 타일이 고른 박자로 쳐지게 해요 (Ctrl+Z로 되돌리기)',
+        onclick: () => {
+          const a = this.fitFrom ?? this.sel;
+          const b = this.fitTo ?? this.chart.finish - 1;
+          const r = fitRhythm(this.level, a, b, this.fitBeats, this.fitBpm || undefined);
+          if (r.changed === 0) {
+            toast('맞출 타일이 없어요 — 시작·끝 타일 번호를 확인해 주세요', 3500);
+            return;
+          }
+          this.commit(r.level);
+          const label = beats.selectedOptions[0]?.textContent ?? '';
+          toast(
+            `타일 ${Math.min(a, b)}~${Math.max(a, b)}: ${r.changed}개 타일의 BPM을 맞췄어요 (기준 ${+r.baseBpm.toFixed(3)} BPM, ${label}${r.skipped ? ` · 미드스핀 ${r.skipped}개 건너뜀` : ''}) — 되돌리기 Ctrl+Z`,
+            5000,
+          );
+        },
+      },
+      '박자 맞추기',
+    );
+    const keep = h('input', {
+      type: 'checkbox',
+      checked: this.keepRhythm,
+      onchange: () => {
+        this.keepRhythm = keep.checked;
+        try {
+          localStorage.setItem('orbit.editor.keepRhythm', keep.checked ? '1' : '0');
+        } catch {
+          /* 무시 */
+        }
+      },
+    });
+    return [
+      h('label', null, '박자 유지'),
+      h(
+        'label',
+        { class: 'row', title: '각도 칸·방향 패드·Shift+방향키로 각도를 바꿀 때, 그 타일과 다음 타일에 속도 변경을 넣어 들리는 박자가 그대로예요' },
+        keep,
+        h('span', { class: 'dim' }, '각도를 바꿔도 박자 그대로 (속도 변경 자동)'),
+      ),
+      h('label', { title: '마법진처럼 각도를 바꿔도 박자는 고르게 — 타일마다 속도 변경(BPM)을 자동으로 넣어요' }, '박자 맞추기'),
+      h('div', { class: 'row', style: 'flex-wrap:wrap;gap:4px' }, h('span', { class: 'dim' }, '시작'), from, pick('from')),
+      h('label', null, ''),
+      h('div', { class: 'row', style: 'flex-wrap:wrap;gap:4px' }, h('span', { class: 'dim' }, '끝'), to, pick('to')),
+      h('label', null, ''),
+      h('div', { class: 'row', style: 'flex-wrap:wrap;gap:4px' }, beats, bpm),
+      h('label', null, ''),
+      run,
+    ];
   }
 
   private levelSection(): HTMLElement {
