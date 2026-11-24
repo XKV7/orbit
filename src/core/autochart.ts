@@ -228,6 +228,158 @@ export function layoutFixed(turns: number[], twirls: number[], startDir: Dir): n
   return path;
 }
 
+// ───────────────────────── 원작 맵처럼 꾸미기 ─────────────────────────
+// 사용자가 준 원작 맵(ofnr·QuomodocunquizE·Phantigma·Cardboard)을 세어 보니: 트윌 100타일당 17~32개(겹침 피하기만이 아니라
+// 구간마다 방향을 바꿔 모양을 만든다), 곧은 길 18~32%, 미드스핀(동타) 100타일당 2~3개, 빠른 구간은 속도 변경으로 길을 편다.
+// 자동 생성은 읽기 쉬워야 하므로 그보다 적게, 난이도에 따라.
+
+/** 꾸미기 수준 (0 쉬움 … 5 원곡 그대로) */
+export const STYLE_LEVEL: Record<AutoDifficulty, number> = { easy: 0, normal: 1, hard: 2, expert: 3, master: 4, full: 5 };
+/** 100타일당 더 넣을 꾸밈 트윌 수 (겹침 피하기 트윌과 별개, 합쳐 30개까지) · 동타(미드스핀) 수 */
+const TWIRL_RATE = [1, 2, 4, 6, 8, 10];
+const MIDSPIN_RATE = [0, 0, 1, 1.5, 2, 2.5];
+
+export interface StyledPlan extends PathPlan {
+  /** 타일별: 누르고 있다가 다음 타일에서 떼는 홀드 */
+  holds: boolean[];
+  /** 미드스핀(동타) 타일 번호 */
+  midspins: number[];
+  path: number[];
+}
+
+/**
+ * 원작 맵처럼 꾸며 길을 배치한다 (간격 = 원래 박):
+ * 1) 동타: 가장 센 강박(크래시 같은 소리) 뒤가 꺾이는 자리에 미드스핀 — 같은 순간 두 번 치기. 어려움 이상.
+ * 2) 트윌: 구간(8·16박) 첫 타격·같은 꺾임이 길게 이어지는 소용돌이 가운데를 '트윌하고 싶은 자리'로 배치기에 알려 준다
+ *    (겹침을 피할 수 있을 때만 그쪽을 고른다 — 나중에 트윌을 끼우면 뒤 길이 통째로 바뀌어 겹쳤다).
+ * 3) 반박보다 촘촘하면 구간별 속도 변경으로 길을 편다.
+ * 꾸민 길이 꾸미지 않은 길보다 더 겹치면 동타부터 빼고 다시.
+ * hitBeats[i] = i+1번 타일을 치는 박, accents[i] = 그 소리 세기 (없으면 박 위치로).
+ */
+export function planStyled(gapsIn: number[], hitBeats: number[], accents: number[] | null, level: number, holdsIn?: boolean[], bpm = 120, maxBpm = 250): StyledPlan {
+  const acc0 = accents ?? hitBeats.map((b) => (Math.abs(b / 16 - Math.round(b / 16)) < 1e-6 ? 1 : Math.abs(b / 4 - Math.round(b / 4)) < 1e-6 ? 0.5 : 0.1));
+  const onGrid = (b: number, unit: number) => Math.abs(b / unit - Math.round(b / unit)) < 1e-6;
+  const straight = (t: number) => Math.abs(t - 1) < 1e-9 || Math.abs(t - 2) < 1e-9;
+  const ms = SPEED_MULTS.filter((m) => m <= 2 || bpm * m <= maxBpm + 1e-6);
+  const fine = gapsIn.some((g) => g > 0 && g < 0.5 - 1e-9);
+
+  const build = (withMid: boolean, withBias: boolean): StyledPlan => {
+    const gaps = gapsIn.slice();
+    const holds = holdsIn ? holdsIn.slice() : gaps.map(() => false);
+    const hb = hitBeats.slice();
+    const acc = acc0.slice();
+    const zero = new Set<number>();
+    // 1) 동타 자리: 반 마디 위의 센 소리, 앞뒤 간격이 반박 이상이고 뒤가 꺾이는 곳 (곧게 가면 지나온 길로 되돌아간다)
+    const wantMid = withMid ? Math.floor((MIDSPIN_RATE[level] * gaps.length) / 100) : 0;
+    if (wantMid > 0) {
+      const sorted = acc.slice().sort((x, y) => x - y);
+      const strong = sorted[Math.floor(sorted.length * 0.9)] ?? Infinity;
+      const cand: number[] = [];
+      for (let m = 8; m < gaps.length - 4; m++) {
+        if (!onGrid(hb[m - 1], 2) || acc[m - 1] < strong) continue;
+        if (gaps[m - 1] < 0.5 - 1e-9 || gaps[m] < 0.5 - 1e-9 || gaps[m] > 2 + 1e-9 || straight(gaps[m]) || holds[m] || holds[m - 1]) continue;
+        cand.push(m);
+      }
+      cand.sort((x, y) => acc[y - 1] - acc[x - 1]);
+      const chosen: number[] = [];
+      for (const m of cand) {
+        if (chosen.length >= wantMid) break;
+        if (chosen.some((c) => Math.abs(c - m) < 16)) continue;
+        chosen.push(m);
+      }
+      for (const m of chosen.sort((x, y) => y - x)) {
+        gaps.splice(m, 0, 0);
+        holds.splice(m, 0, false);
+        hb.splice(m, 0, hb[m - 1]);
+        acc.splice(m, 0, 0);
+      }
+      gaps.forEach((g, k) => {
+        if (g === 0) zero.add(k);
+      });
+    }
+    // 2) 트윌하고 싶은 자리
+    const bias = new Set<number>();
+    if (withBias) {
+      const want = Math.floor((TWIRL_RATE[level] * gaps.length) / 100);
+      const phrase = level >= 2 ? 8 : 16;
+      const cands: { k: number; score: number }[] = [];
+      for (let k = 4; k < gaps.length - 2; k++) {
+        if (zero.has(k) || zero.has(k - 1) || gaps[k] === 0 || straight(gaps[k])) continue;
+        let score = 0;
+        if (onGrid(hb[k - 1], phrase)) score = 2 + acc[k - 1];
+        let run = 1;
+        while (k - run >= 0 && Math.abs(gaps[k - run] - gaps[k]) < 1e-9) run++;
+        if (run >= 6) score = Math.max(score, 1 + run / 10);
+        if (score > 0) cands.push({ k, score });
+      }
+      cands.sort((x, y) => y.score - x.score);
+      for (const { k } of cands) {
+        if (bias.size >= want) break;
+        let near = false;
+        for (const t of bias) if (Math.abs(t - k) < 3) near = true;
+        if (!near) bias.add(k);
+      }
+    }
+    const fixed = fine ? chooseMults(gaps.filter((g) => g > 0).length === gaps.length ? gaps : gaps.map((g, k) => (g > 0 ? g : (gaps[k + 1] ?? 1))), 8, ms) : gaps.map(() => 1);
+    const extra = { twirlBias: bias, zero, holds: new Set(holds.flatMap((h, k) => (h ? [k] : []))) };
+    // 앞보기 길이 × 시작 방향 여러 가지 중 가장 덜 겹치는 것
+    // 겹침이 가장 적고, 같으면 속도 변경이 적은 것 (속도 아이콘이 많으면 읽기 어렵다)
+    let best: { p: PathPlan; path: number[]; score: number } | null = null;
+    for (const la of [12, 24, 40]) {
+      for (const d of ['CW', 'CCW'] as Dir[]) {
+        const p = planPath(gaps, d, la, fixed, fine ? ms : [1], extra);
+        const path = layoutFixed(p.turns, p.twirls, p.dir);
+        let changes = 0;
+        for (let k = 1; k < p.mults.length; k++) if (p.mults[k] !== p.mults[k - 1]) changes++;
+        const score = countOverlaps(path) * 1000 + changes;
+        if (!best || score < best.score) best = { p, path, score };
+      }
+      if (best && best.score < 1000 && !fine) break;
+    }
+    return { ...best!.p, holds, midspins: [...zero].sort((x, y) => x - y), path: best!.path };
+  };
+  const plain = build(false, false);
+  let base = countOverlaps(plain.path);
+  let fallback: StyledPlan = plain;
+  // 반박보다 촘촘하지 않으면 예전 배치기(겹칠 때만 트윌)도 후보 — 꾸민 길이 이것보다 더 겹치면 쓰지 않는다
+  if (!fine) {
+    const hl = holdsIn ?? gapsIn.map(() => false);
+    const turnsF = gapsIn.map((g, k) => (hl[k] && g > 1.5 + 1e-9 && g <= 3 + 1e-9 ? g - 1 : g));
+    const lay = layoutBest(turnsF);
+    const b = countOverlaps(lay.path);
+    if (b < base) {
+      base = b;
+      fallback = { turns: turnsF, pauses: gapsIn.map((g, k) => g - turnsF[k]), mults: gapsIn.map(() => 1), twirls: lay.twirls, dir: lay.dir, holds: hl.slice(), midspins: [], path: lay.path };
+    }
+  }
+  const changes = (p: PathPlan) => p.mults.reduce((a, x, k) => a + (k && x !== p.mults[k - 1] ? 1 : 0), 0);
+  const plainCh = changes(fallback);
+  for (const [m, t] of [
+    [true, true],
+    [false, true],
+  ] as const) {
+    if (level === 0 && m) continue;
+    const st = build(m, t);
+    // 겹침이 늘거나 속도 변경이 크게 늘면(아이콘이 많아 읽기 어렵다) 쓰지 않는다
+    if (countOverlaps(st.path) <= base && changes(st) <= plainCh + Math.max(2, Math.ceil(plainCh * 0.1))) return st;
+  }
+  return fallback;
+}
+
+/** 꾸민 길 → 이벤트 (트윌·일시 공전·속도 변경·미드스핀·홀드) */
+export function styledActions(st: StyledPlan, bpm: number): Action[] {
+  const actions: Action[] = st.twirls.map((k) => ({ floor: k, type: 'Twirl' as const }));
+  st.pauses.forEach((p, k) => {
+    if (p > 0) actions.push({ floor: k, type: 'Pause', beats: p });
+  });
+  for (let k = 1; k < st.mults.length; k++) if (st.mults[k] !== st.mults[k - 1]) actions.push({ floor: k, type: 'SetSpeed', bpm: Math.round(bpm * st.mults[k] * 1000) / 1000 });
+  for (const m of st.midspins) actions.push({ floor: m, type: 'Midspin' });
+  st.holds.forEach((h, k) => {
+    if (h) actions.push({ floor: k, type: 'Hold', beats: 0, toNext: true });
+  });
+  return actions.sort((a, b) => a.floor - b.floor);
+}
+
 /** 여러 방식(앞보기 길이 × 시작 회전 방향)으로 배치해 가장 덜 겹치는 것을 고른다. */
 export function layoutBest(intervals: number[]): { path: number[]; twirls: number[]; dir: Dir } {
   let best: { path: number[]; twirls: number[]; dir: Dir } | null = null;
@@ -293,15 +445,44 @@ export function autoChart(samples: Float32Array, sampleRate: number, opts: AutoO
   const fillTh = percentile(pos.map((p) => p.s), 0.5);
   const fill = pos.filter((p) => p.s > 0 && p.s >= fillTh).map((p) => p.b);
 
+  // 길게 끄는 소리: 구간 안 음량이 친 직후의 절반 넘게 이어지면
+  const rms = rmsEnvelope(samples, sampleRate);
+  const lvl = (t: number) => rms.v[Math.max(0, Math.min(rms.v.length - 1, Math.floor(t / rms.hop)))] ?? 0;
+  const sustain = (b0: number, b1: number) => {
+    const t0 = first + b0 * beat;
+    const t1 = first + b1 * beat;
+    const start = Math.max(lvl(t0 + 0.03), lvl(t0 + 0.08));
+    if (!(start > 0)) return false;
+    let min = Infinity;
+    for (let t = t0 + 0.25 * beat; t < t1 - 0.2 * beat; t += 0.05) min = Math.min(min, lvl(t));
+    return min !== Infinity && min >= start * 0.55;
+  };
   return levelFromHits(picked, bpm, first, {
     minBeats: cfg.minBeats,
     minGapSec: cfg.minGapSec,
+    style: STYLE_LEVEL[diff],
+    accent: (b) => onsetStrength(o, first + b * beat),
+    sustain,
     fill,
     title: opts.title,
     songFile: opts.songFile,
     difficulty: cfg.diff,
     previewStart: Math.max(0, (samples.length / sampleRate) * 0.3),
   });
+}
+
+/** 음량 포락선 (RMS, hop초 간격) */
+export function rmsEnvelope(samples: Float32Array, sampleRate: number, hopSec = 0.02): { hop: number; v: Float32Array } {
+  const hop = Math.max(1, Math.round(hopSec * sampleRate));
+  const v = new Float32Array(Math.ceil(samples.length / hop));
+  for (let i = 0; i < v.length; i++) {
+    let s = 0;
+    const a = i * hop;
+    const b = Math.min(samples.length, a + hop);
+    for (let j = a; j < b; j++) s += samples[j] * samples[j];
+    v[i] = Math.sqrt(s / Math.max(1, b - a));
+  }
+  return { hop: hop / sampleRate, v };
 }
 
 /**
@@ -324,6 +505,12 @@ export function levelFromHits(
     /** 타일 사이 최소 박 (기본 0.5) / 최소 시간 (기본 0.2초). */
     minBeats?: number;
     minGapSec?: number;
+    /** 꾸미기 수준 (STYLE_LEVEL, 기본 1) */
+    style?: number;
+    /** 박 위치의 소리 세기 (동타·트윌 자리 고르기) */
+    accent?: (b: number) => number;
+    /** b0~b1 동안 소리가 이어지는지 (길게 끄는 음 → 홀드) */
+    sustain?: (b0: number, b1: number) => boolean;
   } = {},
 ): AutoResult | null {
   const beat = 60 / bpm;
@@ -331,10 +518,17 @@ export function levelFromHits(
   const minGap = opts.minGapSec ?? MIN_GAP_SEC;
   const fill = [...(opts.fill ?? [])].sort((x, y) => x - y);
   const hits: number[] = [];
+  /** 홀드: hits[i]까지 가는 구간(i번 간격)을 누르고 있기 */
+  const holdAt = new Set<number>();
   let prev = 0;
   for (const b of [...beats].sort((x, y) => x - y)) {
     if (b <= 0) continue;
     while (b - prev > 1.5 + 1e-9) {
+      // 소리가 길게 이어지면 빈 곳을 채우지 않고 홀드 (2박까지)
+      if (b - prev <= 2 + 1e-9 && hits.length > 0 && opts.sustain?.(prev, b)) {
+        holdAt.add(hits.length);
+        break;
+      }
       // 다음 채움 위치: prev+1에 가장 가까운 소리 (prev+0.5 ~ prev+1.5, 다음 타격 0.5박 전까지)
       const lo = prev + Math.max(0.5, minGap / beat);
       const hi = Math.min(prev + 1.5, b - Math.max(minBeats, minGap / beat));
@@ -359,11 +553,13 @@ export function levelFromHits(
   if (hits.length < 8) return null;
   const intervals = hits.map((b, i) => b - (i === 0 ? 0 : hits[i - 1]));
 
-  const lay = layoutBest(intervals);
-  const actions: Action[] = lay.twirls.map((k) => ({ floor: k, type: 'Twirl' as const }));
+  // 원작 맵처럼 꾸며 배치 (동타·트윌·빠른 구간 속도 변경)
+  const st = planStyled(intervals, hits, opts.accent ? hits.map((b) => opts.accent!(b)) : null, opts.style ?? 1, intervals.map((_, i) => holdAt.has(i)), bpm);
+  const lay = { path: st.path, twirls: st.twirls, dir: st.dir };
+  const actions = styledActions(st, bpm);
   const n = lay.path.length + 1;
 
-  const settings = { ...defaultSettings(), bpm, offset: Math.round(first * 1000) / 1000, songFile: opts.songFile ?? '', startDirection: lay.dir };
+  const settings = { ...defaultSettings(), bpm: Math.round(bpm * (st.mults[0] ?? 1) * 1000) / 1000, offset: Math.round(first * 1000) / 1000, songFile: opts.songFile ?? '', startDirection: lay.dir };
   const meta = {
     ...defaultMeta(),
     title: opts.title || '자동 생성 레벨',
@@ -612,8 +808,18 @@ export interface PathPlan {
  * 각 간격 g(원래 박)마다 배율 m 후보로 보이는 박 x = g·m을 만들고, 방향(Twirl)까지 조합해
  * 앞으로 lookahead칸을 시뮬레이션해 가장 오래 겹치지 않는 선택을 한다. 배율 변경·Twirl·날카로운 꺾임에는 비용.
  */
-export function planPath(gaps: number[], startDir: Dir = 'CW', lookahead = 12, fixedMults?: number[], mults: number[] = SPEED_MULTS): PathPlan {
-  const split = (x: number) => (x <= 2 + 1e-9 ? { turn: x, pause: 0 } : { turn: x - 2 * Math.ceil((x - 2) / 2 - 1e-9), pause: 2 * Math.ceil((x - 2) / 2 - 1e-9) });
+export function planPath(
+  gaps: number[],
+  startDir: Dir = 'CW',
+  lookahead = 12,
+  fixedMults?: number[],
+  mults: number[] = SPEED_MULTS,
+  /** twirlBias: 트윌을 반기는 타일 (겹침이 같으면 트윌 쪽), zero: 미드스핀(간격 0) 타일 */
+  extra: { twirlBias?: Set<number>; zero?: Set<number>; holds?: Set<number> } = {},
+): PathPlan {
+  const split0 = (x: number) => (x <= 2 + 1e-9 ? { turn: x, pause: 0 } : { turn: x - 2 * Math.ceil((x - 2) / 2 - 1e-9), pause: 2 * Math.ceil((x - 2) / 2 - 1e-9) });
+  // 홀드(길게 누르기)가 1.5박을 넘으면 한 박은 제자리 공전으로 — 2박이면 U턴(360°)으로 지나온 길에 겹쳤다
+  const split = (x: number, k = -1) => (extra.holds?.has(k) && x > 1.5 + 1e-9 && x <= 3 + 1e-9 ? { turn: x - 1, pause: 1 } : split0(x));
   const pen = (x: number) => (x > 2 ? 0.8 : x < 0.5 - 1e-9 ? 3 + (0.5 - x) * 8 : Math.abs(Math.log2(x)) * (x < 1 ? 1.4 : 1));
   const opts = (g: number, k: number) => {
     const base = optsFree(g);
@@ -662,12 +868,20 @@ export function planPath(gaps: number[], startDir: Dir = 'CW', lookahead = 12, f
     let mm = m;
     for (let j = 1; j <= lookahead && k + j < gaps.length; j++) {
       const g = gaps[k + j];
+      if (g === 0) {
+        // 미드스핀: 제자리에서 되돌아 앞 타일 자리로
+        h = normDeg(h + 180);
+        x += TILE_LEN * Math.cos(degToRad(h));
+        y += TILE_LEN * Math.sin(degToRad(h));
+        sim.push([x, y]);
+        continue;
+      }
       if (fixedMults) mm = fixedMults[k + j];
       else {
         const os = opts(g, k + j);
         if (!os.includes(mm)) mm = os.reduce((a, b) => (Math.abs(Math.log2(g * b)) < Math.abs(Math.log2(g * a)) ? b : a));
       }
-      const t = split(g * mm).turn;
+      const t = split(g * mm, k + j).turn;
       let a = angleOf(h, false, t, dd);
       let nx = x + TILE_LEN * Math.cos(degToRad(a));
       let ny = y + TILE_LEN * Math.sin(degToRad(a));
@@ -694,18 +908,30 @@ export function planPath(gaps: number[], startDir: Dir = 'CW', lookahead = 12, f
   let heading = 0;
   let curM = 1;
   gaps.forEach((g, k) => {
+    if (extra.zero?.has(k) && k > 0) {
+      // 미드스핀: 회전 0, 속도·방향 그대로, 길은 되돌아간다
+      heading = normDeg(heading + 180);
+      plan.turns.push(0);
+      plan.pauses.push(0);
+      plan.mults.push(curM);
+      const i = xs.length - 1;
+      xs.push(xs[i] + TILE_LEN * Math.cos(degToRad(heading)));
+      ys.push(ys[i] + TILE_LEN * Math.sin(degToRad(heading)));
+      addPt(xs.length - 1);
+      return;
+    }
     let best: { c: number; m: number; d: Dir; angle: number; turn: number; pause: number } | null = null;
     // 첫 타일은 원래 템포
     const ms = k === 0 ? [fixedMults?.[0] ?? 1] : opts(g, k);
     for (const m of ms) {
-      const { turn, pause } = split(g * m);
+      const { turn, pause } = split(g * m, k);
       const straight = Math.abs(turn - 1) < 1e-9 || Math.abs(turn - 2) < 1e-9;
       for (const d of straight ? [dir] : [dir, flipDir(dir)]) {
         const angle = angleOf(heading, k === 0, turn, d);
         const free = run(k, angle, m, d);
         // 구간 배율이 정해져 있으면 거기서 벗어나는 데 큰 비용 (겹침을 피할 때만)
         const mc = fixedMults ? (m !== fixedMults[k] ? 125 : 0) : m !== curM ? 2.5 : 0;
-        const c = -Math.min(free, lookahead + 1) * 10 + mc + (d !== dir ? 1.2 : 0) + pen(g * m) * 1.5;
+        const c = -Math.min(free, lookahead + 1) * 10 + mc + (d !== dir ? (extra.twirlBias?.has(k) ? -2 : 1.2) : 0) + pen(g * m) * 1.5;
         if (!best || c < best.c - 1e-9) best = { c, m, d, angle, turn, pause };
       }
     }
@@ -846,32 +1072,18 @@ export function autoChartFull(samples: Float32Array, sampleRate: number, opts: F
 
   // 간격(원래 박) → 속도 배율·방향을 함께 계획 → 보이는 박 (2박 초과는 일시 공전)
   const gaps = hits.map((b, i) => b - (i === 0 ? 0 : hits[i - 1]));
-  let plan: PathPlan;
+  let st: StyledPlan;
   if (opts.speedUp === false) {
     const segs = restsToPauses(hits);
     const lay = layoutBest(segs.map((x) => x.turn));
-    plan = { turns: segs.map((x) => x.turn), pauses: segs.map((x) => x.pause), mults: gaps.map(() => 1), twirls: lay.twirls, dir: lay.dir };
-    (plan as PathPlan & { path?: number[] }).path = lay.path;
+    st = { turns: segs.map((x) => x.turn), pauses: segs.map((x) => x.pause), mults: gaps.map(() => 1), twirls: lay.twirls, dir: lay.dir, holds: gaps.map(() => false), midspins: [], path: lay.path };
   } else {
-    // 두 시작 방향 중 덜 겹치는 쪽
-    const maxBpm = opts.maxBpm ?? 250;
-    const ms = SPEED_MULTS.filter((m) => m <= 2 || bpm * m <= maxBpm + 1e-6);
-    const fixed = chooseMults(gaps, 8, ms);
-    const a = planPath(gaps, 'CW', 12, fixed, ms);
-    const b = planPath(gaps, 'CCW', 12, fixed, ms);
-    const pathOf = (p: PathPlan) => layoutFixed(p.turns, p.twirls, p.dir);
-    plan = countOverlaps(pathOf(a)) <= countOverlaps(pathOf(b)) ? a : b;
+    // 속도 배율·방향을 함께 계획하고 원작 맵처럼 꾸민다 (동타·트윌) — 겹침이 늘지 않을 때만
+    st = planStyled(gaps, hits, hitS, STYLE_LEVEL.full, undefined, bpm, opts.maxBpm ?? 250);
   }
-  const path = (plan as PathPlan & { path?: number[] }).path ?? layoutFixed(plan.turns, plan.twirls, plan.dir);
-  const mults = plan.mults;
-  const lay = { path, twirls: plan.twirls, dir: plan.dir };
-  const actions: Action[] = lay.twirls.map((k) => ({ floor: k, type: 'Twirl' as const }));
-  plan.pauses.forEach((p, k) => {
-    if (p > 0) actions.push({ floor: k, type: 'Pause', beats: p });
-  });
-  for (let k = 1; k < mults.length; k++)
-    if (mults[k] !== mults[k - 1]) actions.push({ floor: k, type: 'SetSpeed', bpm: Math.round(bpm * mults[k] * 1000) / 1000 });
-  actions.sort((a, b) => a.floor - b.floor);
+  const mults = st.mults;
+  const lay = { path: st.path, twirls: st.twirls, dir: st.dir };
+  const actions = styledActions(st, bpm);
   const startBpm = Math.round(bpm * (mults[0] ?? 1) * 1000) / 1000;
   // 첫 박(타일 0 시각)은 원래 템포 기준 — 시작 배율이 1이 아니어도 박 시각은 곡에 맞다
   const settings = { ...defaultSettings(), bpm: startBpm, offset: Math.round(first * 1000) / 1000, songFile: opts.songFile ?? '', startDirection: lay.dir };
