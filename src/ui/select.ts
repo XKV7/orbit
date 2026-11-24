@@ -10,7 +10,7 @@ import { speedSelect } from './speed';
 import { openSongGenerator } from './songgen';
 import { openMp3Converter } from './convert';
 import { TitleScreen } from './title';
-import { onlineAvailable, openOnlineLevels, openRanking, uploadSelected } from './online';
+import { addPermanently, fetchRemote, loadFeatured, onlineAvailable, openOnlineLevels, openRanking, removePermanently, uploadSelected } from './online';
 
 let lastSelected: string | null = null;
 let lastAuto = false;
@@ -35,6 +35,10 @@ export class SelectScreen implements Screen {
   };
   private autoBox!: HTMLInputElement;
   private noFailBox!: HTMLInputElement;
+  /** 영구 목록 추가·빼기 버튼 (고른 레벨에 따라 글자가 바뀐다) */
+  private permBtn: HTMLButtonElement | null = null;
+  /** 영구 목록 레벨의 음원·그림을 받는 중 */
+  private fetching = new Set<string>();
 
   enter(root: HTMLElement): void {
     ambient(true);
@@ -80,6 +84,9 @@ export class SelectScreen implements Screen {
           h('span', { class: 'grow dim' }, 'Enter로 시작 · 방향키로 선택'),
           onlineAvailable() ? h('button', { class: 'btn small', onclick: () => this.sel && void openRanking(this.sel) }, '순위') : null,
           onlineAvailable() ? h('button', { class: 'btn small', onclick: () => this.sel && void uploadSelected(this.sel) }, '올리기') : null,
+          onlineAvailable()
+            ? (this.permBtn = h('button', { class: 'btn small', title: '비밀번호가 필요해요 — 사이트에 들어오는 모든 사람의 레벨 목록에 계속 보여요', onclick: () => void this.togglePermanent() }, '영구 추가') as HTMLButtonElement)
+            : null,
           h('button', { class: 'btn primary', onclick: () => this.play() }, '플레이'),
         ),
       ),
@@ -88,6 +95,55 @@ export class SelectScreen implements Screen {
     const init = (lastSelected && library.get(lastSelected)) || library.items[0];
     if (init) this.select(init);
     window.addEventListener('keydown', this.keyHandler);
+    // 모든 사람의 영구 목록 (온라인)
+    void loadFeatured().then((list) => {
+      let added = false;
+      for (const p of list) {
+        if (library.get(p.id)) continue;
+        library.add(p);
+        added = true;
+      }
+      if (added && this.cards.isConnected) this.render();
+    });
+  }
+
+  /** 고른 레벨을 영구 목록에 넣거나 뺀다 (비밀번호). */
+  private async togglePermanent(): Promise<void> {
+    const p = this.sel;
+    if (!p) return;
+    if (p.featured) {
+      if (!(await removePermanently(p))) return;
+      const out: LevelPackage = { ...p, featured: undefined };
+      library.replace(p.id, out);
+      this.sel = null;
+      this.select(out);
+      return;
+    }
+    const full = p.remote ? await this.download(p) : p;
+    if (!full) return;
+    const done = await addPermanently(full);
+    if (!done) return;
+    library.replace(p.id, done);
+    this.sel = null;
+    this.select(done);
+  }
+
+  /** 영구 목록 레벨의 음원·그림을 받아 목록의 것과 바꾼다. */
+  private async download(p: LevelPackage): Promise<LevelPackage | null> {
+    if (this.fetching.has(p.id)) return null;
+    this.fetching.add(p.id);
+    toast(`'${p.level.meta.title}' 받는 중…`, 2500);
+    try {
+      const full = await fetchRemote(p);
+      library.replace(p.id, full);
+      if (full.warnings.length) toast(full.warnings.join(' '), 4000);
+      return full;
+    } catch (e) {
+      await alertBox('레벨을 받을 수 없습니다', [(e as Error).message]);
+      return null;
+    } finally {
+      this.fetching.delete(p.id);
+    }
   }
 
   private render(): void {
@@ -102,7 +158,13 @@ export class SelectScreen implements Screen {
           'h3',
           null,
           m.title,
-          p.builtin ? h('span', { class: 'tag' }, p.id.startsWith('bundled-') ? '포함됨' : '데모') : p.id.startsWith('cloud-') ? h('span', { class: 'tag' }, '온라인') : null,
+          p.builtin
+            ? h('span', { class: 'tag' }, p.id.startsWith('bundled-') ? '포함됨' : '데모')
+            : p.featured
+              ? h('span', { class: 'tag' }, '고정')
+              : p.id.startsWith('cloud-')
+                ? h('span', { class: 'tag' }, '온라인')
+                : null,
         ),
         h('div', { class: 'meta' }, `${m.artist}${m.author ? ' · 제작 ' + m.author : ''}`),
         h('div', { class: 'meta' }, `${p.level.settings.bpm} BPM · ${p.level.path.length + 1} 타일`),
@@ -117,7 +179,18 @@ export class SelectScreen implements Screen {
     if (this.sel === p) return;
     this.sel = p;
     lastSelected = p.id;
+    if (this.permBtn) this.permBtn.textContent = p.featured ? '영구 목록에서 빼기' : '영구 추가';
     this.render();
+    // 영구 목록 레벨은 고를 때 음원·그림을 받는다
+    if (p.remote) {
+      void this.download(p).then((full) => {
+        if (full && this.sel === p && this.cards.isConnected) {
+          this.sel = null;
+          this.select(full);
+        }
+      });
+      return;
+    }
     void this.preview(p);
   }
 
@@ -209,6 +282,10 @@ export class SelectScreen implements Screen {
   private play(): void {
     if (!this.sel) return;
     const p = this.sel;
+    if (p.remote) {
+      toast('레벨을 받는 중이에요 — 잠시 뒤 다시 눌러 주세요', 2500);
+      return;
+    }
     void show(new PlayScreen(p, { autoplay: this.autoBox.checked, noFail: this.noFailBox.checked, back: () => new SelectScreen() }));
   }
 

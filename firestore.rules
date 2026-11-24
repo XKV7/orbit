@@ -47,6 +47,17 @@ service cloud.firestore {
       }
     }
 
+    // 모든 사람의 레벨 목록에 영구로 고정한 레벨 (문서 ID = levels의 ID). 자기가 올린 레벨만 고정·해제
+    match /featured/{levelId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && levelOwner(levelId) == request.auth.uid
+        && request.resource.data.keys().hasOnly(['by', 'at'])
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.at == request.time;
+      allow delete: if signedIn() && resource.data.by == request.auth.uid;
+    }
+
     match /scores/{scoreId} {
       allow read: if true;
       // 문서 ID = {levelKey}__{uid}, 자기 기록만, 더 높을 때만 갱신

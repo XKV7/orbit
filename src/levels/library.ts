@@ -17,6 +17,20 @@ class Library {
     else this.items.push(pkg);
   }
 
+  /** oldId 자리에 pkg를 넣는다 (없으면 뒤에 추가, pkg.id가 이미 있으면 그 자리는 지운다). */
+  replace(oldId: string, pkg: LevelPackage): void {
+    const dup = this.items.findIndex((p) => p.id === pkg.id && p.id !== oldId);
+    if (dup >= 0) this.items.splice(dup, 1);
+    const i = this.items.findIndex((p) => p.id === oldId);
+    if (i >= 0) this.items[i] = pkg;
+    else this.items.push(pkg);
+  }
+
+  remove(id: string): void {
+    const i = this.items.findIndex((p) => p.id === id);
+    if (i >= 0) this.items.splice(i, 1);
+  }
+
   get(id: string): LevelPackage | undefined {
     return this.items.find((p) => p.id === id);
   }

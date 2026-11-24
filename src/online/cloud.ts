@@ -305,6 +305,40 @@ export async function downloadLevel(docId: string, onProgress?: (r: number) => v
   return { id: cloudPackageId(docId), level: r.level, files, builtin: false, warnings };
 }
 
+// ───────────────────────── 영구 목록 (모든 사람의 레벨 선택 화면) ─────────────────────────
+//   featured/{levelId}  { by: 올린 사람 uid, at: 시각 } — levels/{levelId}를 모든 사람의 목록에 고정
+
+/** 영구 목록의 레벨들: 레벨 정보만 (음원·그림은 고를 때 downloadLevel로 받는다). */
+export async function listFeatured(): Promise<LevelPackage[]> {
+  const { db, fs } = await sdk();
+  const snap = await fs.getDocs(fs.query(fs.collection(db, 'featured'), fs.orderBy('at', 'asc'), fs.limit(200)));
+  const out = await Promise.all(
+    snap.docs.map(async (d): Promise<LevelPackage | null> => {
+      try {
+        const lv = await fs.getDoc(fs.doc(db, 'levels', d.id));
+        if (!lv.exists() || !lv.data().ready) return null;
+        const r = parseLevelJson(String(lv.data().levelJson ?? ''));
+        if (!r.ok) return null;
+        return { id: cloudPackageId(d.id), level: r.level, files: new Map(), builtin: false, warnings: [], featured: d.id, remote: d.id };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return out.filter((p): p is LevelPackage => !!p);
+}
+
+export async function featureLevel(docId: string): Promise<void> {
+  if (!me) throw new Error('로그인이 필요합니다.');
+  const { db, fs } = await sdk();
+  await fs.setDoc(fs.doc(db, 'featured', docId), { by: me.uid, at: fs.serverTimestamp() });
+}
+
+export async function unfeatureLevel(docId: string): Promise<void> {
+  const { db, fs } = await sdk();
+  await fs.deleteDoc(fs.doc(db, 'featured', docId));
+}
+
 export async function deleteLevel(docId: string): Promise<void> {
   const { db, fs } = await sdk();
   const chunks = await fs.getDocs(fs.collection(db, 'levels', docId, 'chunks'));
