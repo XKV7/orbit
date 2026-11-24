@@ -52,12 +52,14 @@ import {
 import { loadEditorFiles, loadEditorLevel, saveEditorFiles, saveEditorLevel } from '../levels/store';
 import { stage } from '../render/stage';
 import { fmtBeats, TrackView } from '../render/track';
-import { alertBox, confirmBox, fileButton, h, isTyping, show, toast, warnIfHuge, type Screen } from '../ui/dom';
+import { alertBox, choiceBox, confirmBox, fileButton, h, isTyping, show, toast, warnIfHuge, type Screen } from '../ui/dom';
 import { PlayScreen } from '../ui/play';
 import { openSongGenerator } from '../ui/songgen';
 import { openMp3Converter } from '../ui/convert';
 import { TitleScreen } from '../ui/title';
 import { addPermanently, onlineAvailable } from '../ui/online';
+import { chartSong, GENRES } from '../audio/chartsong';
+import { encodeWav } from '../audio/songgen';
 import { ACTION_LABEL, defaultAction, EASE_NAMES, SCHEMA, type Field } from './schema';
 import { WaveTimeline } from './waveform';
 
@@ -1164,6 +1166,41 @@ export class EditorScreen implements Screen {
     }
   }
 
+  /** 채보에 맞춰 노래 만들기: 장르를 고르면 타일 치는 순간마다 멜로디가 나오는 곡을 합성해 이 레벨의 음원으로 넣는다. */
+  private async songFromChart(): Promise<void> {
+    if (this.chart.finish < 4) {
+      toast('타일을 몇 개 더 놓은 뒤 만들어 주세요', 3000);
+      return;
+    }
+    const cur = this.level.settings.songFile;
+    const ours = !!cur && /^orbit-(chiptune|speedcore|rhythmcore|artcore)-\d+\.wav$/.test(cur);
+    if (cur && !ours && !this.pkg.synthesized && !(await confirmBox('음원 바꾸기', `지금 음원('${cur}')을 새로 만든 곡으로 바꿀까요? (실행 취소로 되돌릴 수 있어요)`, '바꾸기'))) return;
+    const g = await choiceBox('채보로 노래 만들기', '만든 맵에 맞춰 곡을 만들어요. 타일을 치는 순간마다 멜로디가 나오고, 드럼·베이스·화음은 맵의 박에 맞춰요. 다시 만들면 다른 곡이 나와요.', GENRES);
+    if (!g) return;
+    toast('곡을 만드는 중…', 2000);
+    await new Promise((r) => setTimeout(r, 30));
+    const seed = Math.floor(Math.random() * 90000) + 10000;
+    const sr = this.eng.ctx.sampleRate;
+    const pcm = chartSong(this.chart, g, seed, sr);
+    const name = `orbit-${g}-${seed}.wav`;
+    // 만든 곡 파일은 바로 앞 것까지만 남긴다 (실행 취소로 한 번 돌아갈 수 있게, 용량은 아끼게)
+    for (const f of [...this.pkg.files.keys()]) if (/^orbit-(chiptune|speedcore|rhythmcore|artcore)-\d+\.wav$/.test(f) && f !== cur) this.pkg.files.delete(f);
+    this.pkg.files.set(name, encodeWav(pcm, sr));
+    const buf = this.eng.bufferFromSamples(pcm, sr);
+    const lv = cloneLevel(this.level);
+    lv.settings.songFile = name;
+    if (!lv.meta.artist || lv.meta.artist === '알 수 없음') lv.meta.artist = 'ORBIT 작곡';
+    this.pkg.buffer = buf;
+    this.pkg.synthesized = false;
+    this.commit(lv);
+    this.pkg.buffer = buf;
+    this.pkg.synthesized = false;
+    this.wave.buffer = buf;
+    this.wave.draw();
+    const label = GENRES.find((x) => x.value === g)!.label;
+    toast(`${label} 곡을 만들어 음원으로 넣었어요 (${Math.round(pcm.length / sr)}초) — 플레이테스트로 들어 보세요. 다시 누르면 다른 곡`, 5000);
+  }
+
   private async addImage(files: FileList): Promise<void> {
     const f = files[0];
     this.pkg.files.set(f.name, new Uint8Array(await f.arrayBuffer()));
@@ -1249,6 +1286,7 @@ export class EditorScreen implements Screen {
             '동영상 → mp3',
           ),
           pickImg,
+          h('button', { class: 'btn small cool', title: '만든 맵의 타일 치는 순간에 맞춰 곡을 만들어 음원으로 넣어요 (장르 선택)', onclick: () => void this.songFromChart() }, '채보로 노래 만들기'),
           h('button', { class: 'btn small', onclick: () => this.addToLibrary() }, '목록에 추가'),
           onlineAvailable()
             ? h('button', { class: 'btn small', title: '비밀번호가 필요해요 — 사이트에 들어오는 모든 사람의 레벨 목록에 계속 보여요', onclick: () => void this.addPermanent() }, '영구 추가')
