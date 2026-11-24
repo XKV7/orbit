@@ -188,7 +188,7 @@ export function layoutBeats(intervals: number[], startDir: Dir = 'CW', lookahead
 }
 
 /** 경로가 자기와 겹치는 쌍 수 (i와 j가 3칸 이상 떨어졌는데 0.6타일보다 가까움). */
-export function countOverlaps(path: number[]): number {
+export function countOverlaps(path: number[], same?: (i: number, j: number) => boolean): number {
   const xs = [0];
   const ys = [0];
   for (const a of path) {
@@ -203,13 +203,25 @@ export function countOverlaps(path: number[]): number {
     const cy = Math.floor(ys[i] / TILE_LEN);
     for (let dx = -1; dx <= 1; dx++)
       for (let dy = -1; dy <= 1; dy++)
-        for (const j of grid.get(`${cx + dx},${cy + dy}`) ?? []) if (i - j >= 3 && Math.hypot(xs[i] - xs[j], ys[i] - ys[j]) < lim) bad++;
+        for (const j of grid.get(`${cx + dx},${cy + dy}`) ?? []) if (i - j >= 3 && Math.hypot(xs[i] - xs[j], ys[i] - ys[j]) < lim && !same?.(i, j)) bad++;
     const k = `${cx},${cy}`;
     const a = grid.get(k);
     if (a) a.push(i);
     else grid.set(k, [i]);
   }
   return bad;
+}
+
+/** 겹침 수 — 동타 묶음(이어진 미드스핀과 그 앞뒤 타일)끼리는 빼고. midspins = 미드스핀 타일 번호 */
+export function overlapsBesidesMultiHits(path: number[], midspins: number[]): number {
+  const ms = [...midspins].sort((a, b) => a - b);
+  const chains: [number, number][] = [];
+  for (const m of ms) {
+    const c = chains[chains.length - 1];
+    if (c && m === c[1]) c[1] = m + 1;
+    else chains.push([m - 1, m + 1]);
+  }
+  return countOverlaps(path, (i, j) => chains.some(([a, b]) => i >= a && i <= b && j >= a && j <= b));
 }
 
 /** 정해진 회전 박·Twirl 위치로 경로 계산. */
@@ -238,6 +250,16 @@ export const STYLE_LEVEL: Record<AutoDifficulty, number> = { easy: 0, normal: 1,
 /** 100타일당 더 넣을 꾸밈 트윌 수 (겹침 피하기 트윌과 별개, 합쳐 30개까지) · 동타(미드스핀) 수 */
 const TWIRL_RATE = [1, 2, 4, 6, 8, 10];
 const MIDSPIN_RATE = [0, 0, 1, 1.5, 2, 2.5];
+/** 동타 한 번에 치는 수: 소리가 셀수록 많이 (사용자 요청 2·3·4·6·8·10·12·16), 난이도별 최대 */
+export const MULTI_HITS = [2, 3, 4, 6, 8, 10, 12, 16];
+const MULTI_MAX = [0, 0, 3, 6, 10, 16];
+/** 센 정도(0~1) → 동타 수 */
+export function multiHitCount(strength: number, level: number): number {
+  const list = MULTI_HITS.filter((n) => n <= MULTI_MAX[level]);
+  if (!list.length) return 2;
+  const r = Math.max(0, Math.min(1, strength));
+  return list[Math.min(list.length - 1, Math.floor(r * list.length))];
+}
 
 export interface StyledPlan extends PathPlan {
   /** 타일별: 누르고 있다가 다음 타일에서 떼는 홀드 */
@@ -245,6 +267,8 @@ export interface StyledPlan extends PathPlan {
   /** 미드스핀(동타) 타일 번호 */
   midspins: number[];
   path: number[];
+  /** 겹침 수 (동타 묶음 안은 빼고) */
+  overlaps?: number;
 }
 
 /**
@@ -269,6 +293,8 @@ export function planStyled(gapsIn: number[], hitBeats: number[], accents: number
     const hb = hitBeats.slice();
     const acc = acc0.slice();
     const zero = new Set<number>();
+    /** 동타 묶음 (타일 번호 범위) — 미드스핀이 이어지면 두 자리를 오가며 겹쳐 놓이는 게 원작 모양이라 겹침으로 세지 않는다 */
+    const chains: [number, number][] = [];
     // 1) 동타 자리: 반 마디 위의 센 소리, 앞뒤 간격이 반박 이상이고 뒤가 꺾이는 곳 (곧게 가면 지나온 길로 되돌아간다)
     const wantMid = withMid ? Math.floor((MIDSPIN_RATE[level] * gaps.length) / 100) : 0;
     if (wantMid > 0) {
@@ -287,11 +313,17 @@ export function planStyled(gapsIn: number[], hitBeats: number[], accents: number
         if (chosen.some((c) => Math.abs(c - m) < 16)) continue;
         chosen.push(m);
       }
+      // 동타 수: 고른 자리 중 상대 세기 (가장 센 소리 = 가장 많이)
+      const accMax = Math.max(...chosen.map((m) => acc[m - 1]), strong);
       for (const m of chosen.sort((x, y) => y - x)) {
-        gaps.splice(m, 0, 0);
-        holds.splice(m, 0, false);
-        hb.splice(m, 0, hb[m - 1]);
-        acc.splice(m, 0, 0);
+        const r = accMax > strong ? (acc[m - 1] - strong) / (accMax - strong) : 0;
+        const k = multiHitCount(r, level) - 1; // 같은 순간 추가 타격 수 = 미드스핀 수
+        gaps.splice(m, 0, ...new Array(k).fill(0));
+        holds.splice(m, 0, ...new Array(k).fill(false));
+        hb.splice(m, 0, ...new Array(k).fill(hb[m - 1]));
+        acc.splice(m, 0, ...new Array(k).fill(0));
+        for (const c of chains) if (c[0] > m) (c[0] += k), (c[1] += k);
+        chains.push([m - 1, m + k]);
       }
       gaps.forEach((g, k) => {
         if (g === 0) zero.add(k);
@@ -320,7 +352,12 @@ export function planStyled(gapsIn: number[], hitBeats: number[], accents: number
         if (!near) bias.add(k);
       }
     }
-    const fixed = fine ? chooseMults(gaps.filter((g) => g > 0).length === gaps.length ? gaps : gaps.map((g, k) => (g > 0 ? g : (gaps[k + 1] ?? 1))), 8, ms) : gaps.map(() => 1);
+    const nextNonZero = (k: number) => {
+      for (let j = k; j < gaps.length; j++) if (gaps[j] > 0) return gaps[j];
+      return 1;
+    };
+    const fixed = fine ? chooseMults(gaps.map((g, k) => (g > 0 ? g : nextNonZero(k))), 8, ms) : gaps.map(() => 1);
+    const same = (i: number, j: number) => chains.some(([a, b]) => i >= a && i <= b && j >= a && j <= b);
     const extra = { twirlBias: bias, zero, holds: new Set(holds.flatMap((h, k) => (h ? [k] : []))) };
     // 앞보기 길이 × 시작 방향 여러 가지 중 가장 덜 겹치는 것
     // 겹침이 가장 적고, 같으면 속도 변경이 적은 것 (속도 아이콘이 많으면 읽기 어렵다)
@@ -331,12 +368,12 @@ export function planStyled(gapsIn: number[], hitBeats: number[], accents: number
         const path = layoutFixed(p.turns, p.twirls, p.dir);
         let changes = 0;
         for (let k = 1; k < p.mults.length; k++) if (p.mults[k] !== p.mults[k - 1]) changes++;
-        const score = countOverlaps(path) * 1000 + changes;
+        const score = countOverlaps(path, same) * 1000 + changes;
         if (!best || score < best.score) best = { p, path, score };
       }
       if (best && best.score < 1000 && !fine) break;
     }
-    return { ...best!.p, holds, midspins: [...zero].sort((x, y) => x - y), path: best!.path };
+    return { ...best!.p, holds, midspins: [...zero].sort((x, y) => x - y), path: best!.path, overlaps: Math.floor(best!.score / 1000) };
   };
   const plain = build(false, false);
   let base = countOverlaps(plain.path);
@@ -361,7 +398,7 @@ export function planStyled(gapsIn: number[], hitBeats: number[], accents: number
     if (level === 0 && m) continue;
     const st = build(m, t);
     // 겹침이 늘거나 속도 변경이 크게 늘면(아이콘이 많아 읽기 어렵다) 쓰지 않는다
-    if (countOverlaps(st.path) <= base && changes(st) <= plainCh + Math.max(2, Math.ceil(plainCh * 0.1))) return st;
+    if ((st.overlaps ?? countOverlaps(st.path)) <= base && changes(st) <= plainCh + Math.max(2, Math.ceil(plainCh * 0.1))) return st;
   }
   return fallback;
 }
