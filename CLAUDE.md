@@ -166,7 +166,8 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 
 ## 7. 제작 과정 (PR 요약, 최근 → 과거)
 
-**원작 레벨 재현 · 원작 규칙 (#71~#100)**
+**원작 레벨 재현 · 원작 규칙 (#71~#101)**
+- #101 공개 맵 모두 지움 (사용자: 튜토리얼부터 다시 만들기로): 내장 데모 5개(`demos.ts` — 이제 테스트용으로만, 목록에 안 넣음)와 `public/levels/`의 포함 레벨 9개(geom·jemok-*·m1~m5·example) 삭제, `index.json` = []. 지우기 전 상태는 bc57cae (#100). 빈 목록 안내 문구·방향키 가드. 온라인(Firestore) 레벨은 올린 사람만 지울 수 있어 손대지 않음.
 - #100 **영구 목록**: 레벨 선택 하단·에디터 위 '영구 추가' → 비밀번호(사용자가 앎 — 코드엔 SHA-256('orbit:'+비밀번호)만, 화면 잠금 수준이라고 사용자가 정함) → Google 로그인 → 온라인에 올리기(`uploadLevel`, 이미 내가 올린 온라인 레벨이면 생략) → `featured/{레벨 id}` 문서 {by, at}. 모든 사람의 레벨 선택 화면이 시작할 때 `listFeatured`로 레벨 정보만 받아 '고정' 태그로 보이고, 고르면 음원·그림을 받는다(`remote`). '영구 목록에서 빼기'(비밀번호)는 추가한 계정만 (firestore.rules `featured`: 읽기 누구나, 만들기 = 그 레벨을 올린 사람, 지우기 = 추가한 사람). 에뮬레이터 시험: 규칙 파일과 auth·firestore 포트가 든 firebase.json이 있는 폴더에서 `npx firebase-tools@15 emulators:exec --project demo-orbit --only firestore,auth` + `vite build --mode emulator` (저장소 firebase.json엔 emulators 설정이 없어 auth가 안 뜬다, 규칙 없는 폴더에서 돌리면 규칙이 안 걸린다).
 - #99 에디터 '카메라 계속 회전': n번 타일부터 m번 타일까지 p도를 일정한 속도로 (`editorOps.spinCamera` — n번 타일에 카메라 이벤트 1개: 회전 = 그때 각도(앞 카메라 이벤트의 마지막 회전값) + p, 길이 = n~m 시간을 n번 타일 BPM 박으로, 이징 linear. 도중 BPM이 바뀌어도 m번 타일에 끝남). 카메라 회전 값은 '최종 각도'다.
 - #98 에디터: 자동 플레이·무적 모드 체크를 플레이테스트 버튼 바로 아래로 (`playtestBox`, 오른쪽 도구 칸 맨 아래라 장식 많은 맵에서 내려가기 힘들었다)

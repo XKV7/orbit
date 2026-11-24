@@ -27,6 +27,7 @@ export class SelectScreen implements Screen {
     else if (e.key === 'Enter' && this.sel) this.play();
     else if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
       const items = library.items;
+      if (!items.length) return;
       const i = this.sel ? items.indexOf(this.sel) : -1;
       const d = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? 1 : -1;
       this.select(items[(i + d + items.length) % items.length]);
@@ -148,6 +149,8 @@ export class SelectScreen implements Screen {
 
   private render(): void {
     this.cards.innerHTML = '';
+    if (!library.items.length)
+      this.cards.append(h('div', { class: 'dim', style: 'padding:24px' }, '아직 레벨이 없어요 — 위의 버튼으로 레벨을 불러오거나, 레벨 에디터에서 만들어 "영구 추가"로 목록에 올려 주세요.'));
     for (const p of library.items) {
       const m = p.level.meta;
       const best = getBest(p.id);

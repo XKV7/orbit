@@ -1,15 +1,11 @@
-import { demoLevels } from './demos';
 import { packageFromFiles, type LevelPackage } from './package';
 
-/** 세션 동안의 레벨 목록 (내장 데모 + 함께 배포된 레벨 + 불러온 레벨). */
+/**
+ * 세션 동안의 레벨 목록 (함께 배포된 레벨 + 영구 목록 + 불러온 레벨).
+ * 내장 데모(`demos.ts`)는 목록에서 뺐다 — 사용자가 튜토리얼부터 다시 만들기로 함 (#101). demos.ts는 테스트용으로 남김.
+ */
 class Library {
-  readonly items: LevelPackage[] = demoLevels().map((d) => ({
-    id: d.id,
-    level: d.level,
-    files: new Map(),
-    builtin: true,
-    warnings: [],
-  }));
+  readonly items: LevelPackage[] = [];
 
   add(pkg: LevelPackage): void {
     const i = this.items.findIndex((p) => p.id === pkg.id);
