@@ -63,3 +63,47 @@ describe('채보에 맞춰 노래 만들기', () => {
     for (let i = 20; i <= ch.finish; i++) expect(grid.some((g) => Math.abs(g.t - ch.tiles[i].time) < 1e-4)).toBe(true);
   });
 });
+
+describe('곡 구조 (맵 밀도로 구간)', () => {
+  it('드문 곳 = 쉼, 빽빽한 곳 = 드랍, 드랍 앞 마디 = 빌드업, 처음 = 도입', async () => {
+    const { planSections } = await import('../src/audio/chartsong');
+    // 4마디씩: 보통, 드묾, 보통, 빽빽, 빽빽, 드묾, 빽빽
+    const bars = [...Array(4).fill(4), ...Array(4).fill(1), ...Array(4).fill(4), ...Array(8).fill(12), ...Array(4).fill(1), ...Array(4).fill(12)];
+    const s = planSections(bars);
+    expect(s[0]).toBe('intro');
+    expect(s[4]).toBe('break');
+    expect(s[11]).toBe('build');
+    expect(s[12]).toBe('drop');
+    expect(s[19]).toBe('drop');
+    expect(s[20]).toBe('break');
+    expect(s[23]).toBe('build');
+    expect(s[24]).toBe('drop');
+  });
+  it('구간마다 크기가 다르다 (예전엔 처음부터 끝까지 같았다)', () => {
+    const l = emptyLevel();
+    l.settings.bpm = 150;
+    l.settings.offset = 1;
+    l.actions = [];
+    // 16마디 드문 길(1박) → 16마디 빽빽한 길(반박: 매 타일 90° 꺾임)
+    const p: number[] = [];
+    let a = 0;
+    for (let i = 0; i < 64; i++) p.push(a);
+    for (let i = 0; i < 128; i++) {
+      a = (a + 90) % 360;
+      p.push(a);
+    }
+    l.path = p;
+    const ch = compileChart(l);
+    expect(ch.tiles[100].beats).toBeCloseTo(0.5, 6);
+    const sr = 8000;
+    const s = chartSong(ch, 'speedcore', 3, sr);
+    const rms = (t0: number, t1: number) => {
+      let e = 0;
+      for (let i = Math.floor(t0 * sr); i < Math.floor(t1 * sr); i++) e += s[i] * s[i];
+      return Math.sqrt(e / ((t1 - t0) * sr));
+    };
+    const calm = rms(ch.tiles[20].time, ch.tiles[50].time);
+    const loud = rms(ch.tiles[120].time, ch.tiles[180].time);
+    expect(loud).toBeGreaterThan(calm * 1.3);
+  });
+});
