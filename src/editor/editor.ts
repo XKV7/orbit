@@ -118,6 +118,33 @@ function initialPackage(): LevelPackage {
   return editing;
 }
 
+/** 지금 에디터에 고친 레벨이 있는지 (다른 레벨을 열기 전에 묻는다) */
+export function editorHasWork(): boolean {
+  return !!editing && editing.level.path.length > 4;
+}
+
+/**
+ * 플레이 목록의 레벨을 에디터로 연다: 복사본(새 id)을 만들어 편집 중인 레벨로 둔다 — 원본(목록·온라인·영구 목록)은 그대로.
+ * 저장소 되살리기는 건너뛰고(열려는 레벨을 덮지 않게), 이 레벨이 새 자동 저장이 된다.
+ */
+export function openInEditor(src: LevelPackage): void {
+  editing = {
+    ...src,
+    id: newPackageId('edit'),
+    level: cloneLevel(src.level),
+    files: new Map(src.files),
+    builtin: false,
+    warnings: [],
+    featured: undefined,
+    remote: undefined,
+  };
+  restoreTried = true;
+  restoreDone = true;
+  editedSinceLoad = false;
+  savedFilesId = null;
+  void show(new EditorScreen());
+}
+
 export class EditorScreen implements Screen {
   private pkg = initialPackage();
   private level: LevelData = this.pkg.level;
