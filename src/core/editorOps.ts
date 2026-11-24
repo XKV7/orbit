@@ -229,3 +229,35 @@ export function keepTiming(before: LevelData, after: LevelData, from: number, to
   }
   return lv;
 }
+
+export interface SpinResult {
+  level: LevelData;
+  /** 시작 각도 → 끝 각도 (°), 걸리는 박 수 (시작 타일 BPM 기준) */
+  from: number;
+  to: number;
+  beats: number;
+}
+
+/**
+ * 카메라 계속 회전: from번 타일부터 to번 타일까지 카메라가 degrees만큼 고르게(일정한 속도로) 돈다 (원작 MoveCamera 회전 + Linear).
+ * from번 타일에 카메라 이벤트(회전 = 그때 각도 + degrees, 길이 = 두 타일 사이 시간을 from 타일 BPM 박으로, 이징 linear)를 넣는다.
+ * 카메라 회전 값은 '최종 각도'라 돌고 난 뒤 그 각도에 머문다. 360처럼 한 바퀴를 넣으면 제자리로 보인다.
+ * 시작 각도 = from 타일 시각까지 실행된 카메라 이벤트의 마지막 회전 값 (없으면 0, 조건 연출은 셈하지 않음).
+ */
+export function spinCamera(level: LevelData, from: number, to: number, degrees: number): SpinResult | null {
+  const ch = compileChart(level);
+  const a = Math.max(0, Math.min(from, to, ch.finish));
+  const b = Math.min(ch.finish, Math.max(from, to));
+  if (b <= a || !Number.isFinite(degrees) || degrees === 0) return null;
+  const t0 = ch.tiles[a].time;
+  let rot = 0;
+  for (const v of ch.visual) {
+    if (v.time > t0 + 1e-9) break;
+    if (v.action.type === 'Camera' && v.action.rotation !== undefined) rot = v.action.rotation;
+  }
+  const beats = ((ch.tiles[b].time - t0) * ch.tiles[a].bpm) / 60;
+  if (!(beats > 0)) return null;
+  const to2 = Math.round((rot + degrees) * 1e6) / 1e6;
+  const lv = addAction(level, { floor: a, type: 'Camera', rotation: to2, duration: Math.round(beats * 1e6) / 1e6, ease: 'linear' });
+  return { level: lv, from: rot, to: to2, beats };
+}
