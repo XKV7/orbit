@@ -23,6 +23,10 @@ export interface LevelPackage {
   imported?: 'adofai';
   /** 변환에 쓴 원작 레벨 파일 이름 (files 안에 있음) — 나중에 새 변환기로 다시 변환할 때 쓴다. */
   source?: string;
+  /** 모든 사람의 목록에 영구로 올라간 레벨 (온라인 문서 id) */
+  featured?: string;
+  /** 아직 파일(음원·그림)을 안 받은 온라인 레벨: 고르면 받는다 (온라인 문서 id) */
+  remote?: string;
 }
 
 /** 레벨이 쓰는 파일 이름 모두 (음원·배경 그림·배경 동영상·장식 그림 + 원작 레벨 파일). */

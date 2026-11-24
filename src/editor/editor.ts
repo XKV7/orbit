@@ -57,6 +57,7 @@ import { PlayScreen } from '../ui/play';
 import { openSongGenerator } from '../ui/songgen';
 import { openMp3Converter } from '../ui/convert';
 import { TitleScreen } from '../ui/title';
+import { addPermanently, onlineAvailable } from '../ui/online';
 import { ACTION_LABEL, defaultAction, EASE_NAMES, SCHEMA, type Field } from './schema';
 import { WaveTimeline } from './waveform';
 
@@ -1199,6 +1200,18 @@ export class EditorScreen implements Screen {
     void alertBox('추가됨', ['레벨 선택 화면에 추가했습니다 (이번 세션 동안 유지).']);
   }
 
+  /** 모든 사람의 레벨 목록에 영구 추가 (비밀번호·로그인·온라인 올리기). */
+  private async addPermanent(): Promise<void> {
+    const r = validateLevel(this.level);
+    if (!r.ok) {
+      void alertBox('레벨 오류', r.errors);
+      return;
+    }
+    const pkg: LevelPackage = { ...this.pkg, id: this.pkg.id.replace(/^edit/, 'user'), level: cloneLevel(this.level), buffer: this.pkg.synthesized ? undefined : this.pkg.buffer };
+    const done = await addPermanently(pkg);
+    if (done) library.replace(pkg.id, done);
+  }
+
   // ───────────────────────── DOM ─────────────────────────
 
   private buildDom(root: HTMLElement): void {
@@ -1237,6 +1250,9 @@ export class EditorScreen implements Screen {
           ),
           pickImg,
           h('button', { class: 'btn small', onclick: () => this.addToLibrary() }, '목록에 추가'),
+          onlineAvailable()
+            ? h('button', { class: 'btn small', title: '비밀번호가 필요해요 — 사이트에 들어오는 모든 사람의 레벨 목록에 계속 보여요', onclick: () => void this.addPermanent() }, '영구 추가')
+            : null,
           h('span', { class: 'grow' }),
           this.recBadge,
           h('button', { class: 'btn small', onclick: () => this.undo(), title: 'Ctrl+Z' }, '↶'),
