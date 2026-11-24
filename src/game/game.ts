@@ -1003,6 +1003,12 @@ export class Game {
       decos: vis(this.deco.behind) + vis(this.deco.front),
       tiles: this.track.visibleCount,
       tileIds: (window as unknown as { __orbitTileIds?: boolean }).__orbitTileIds ? [...this.track.visibleSet] : undefined,
+      // 자동 시험용: 지금 보이는 장식 (원작과 다르게 남아 있는 장식 찾기)
+      decoList: (window as unknown as { __orbitDecoList?: boolean }).__orbitDecoList
+        ? tl.decos
+            .filter((d) => d.visible && d.opacity * d.calpha > 0.01 && d.sx !== 0 && d.sy !== 0)
+            .map((d) => `${d.tags.join(' ')}|${d.image ?? ''}|${(d.opacity * d.calpha).toFixed(2)}|${d.sx.toFixed(2)}`)
+        : undefined,
       texMB: Math.round(this.deco.textureMB),
       img: { ...this.deco.stats, failedNames: undefined, missingNames: undefined, waiting: this.deco.waiting },
       frameMs: +this.frameCpu.toFixed(2),

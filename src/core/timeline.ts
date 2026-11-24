@@ -188,6 +188,8 @@ export class VisualTimeline {
 
   private idx = 0;
   private active: ActiveAnim[] = [];
+  /** 진행 중인 장식 이동 (원작 DOTween: 새 MoveDecorations가 같은 장식·같은 속성의 진행 중인 움직임을 멈춘다) */
+  private decoMoves: { targets: Set<DecoState>; props: Set<string>; killed: Map<DecoState, Set<string>> }[] = [];
   /** 판정 조건으로 불린, 아직 시작 전인 연출 (시각순) */
   private pending: TimedAction[] = [];
   private lastT = -Infinity;
@@ -349,6 +351,7 @@ export class VisualTimeline {
     this.moveSerial = 0;
     this.idx = 0;
     this.active = [];
+    this.decoMoves = [];
     this.pending = [];
     this.lastT = -Infinity;
     this.version++;
@@ -770,6 +773,36 @@ export class VisualTimeline {
         const from = targets.map((d) => ({ ox: d.ox, oy: d.oy, rot: d.rot, sx: d.sx, sy: d.sy, color: d.color, opacity: d.opacity, calpha: d.calpha, parx: d.parx, pary: d.pary, pox: d.pox, poy: d.poy, pvx: d.pvx, pvy: d.pvy }));
         // null인 축은 지금 값 그대로
         const to = (v: number | null | undefined, cur: number, k: number) => (v === null || v === undefined ? cur : lerp(cur, v, k));
+        // 이 이벤트가 바꾸는 속성 → 앞서 진행 중인 같은 장식의 같은 속성 움직임은 멈춘다 (원작 DOTween Kill)
+        // QuomodocunquizE 1:03: 2222%로 키우는 중 '크기 0'이 와도 키우기가 계속돼 거대한 원이 화면을 덮었다
+        const props = new Set<string>();
+        const ax = (v: [number | null, number | null] | undefined, x: string, y: string) => {
+          if (!v) return;
+          if (v[0] !== null) props.add(x);
+          if (v[1] !== null) props.add(y);
+        };
+        ax(a.offset, 'ox', 'oy');
+        ax(a.scale, 'sx', 'sy');
+        ax(a.parallax, 'parx', 'pary');
+        ax(a.parallaxOffset, 'pox', 'poy');
+        ax(a.pivot, 'pvx', 'pvy');
+        if (a.rotation !== undefined) props.add('rot');
+        if (a.alpha !== undefined) props.add('calpha');
+        if (col !== null) props.add('color');
+        if (a.opacity !== undefined) props.add('opacity');
+        for (const m of this.decoMoves) {
+          for (const d of targets) {
+            if (!m.targets.has(d)) continue;
+            let k = m.killed.get(d);
+            for (const pr of props) {
+              if (!m.props.has(pr)) continue;
+              if (!k) m.killed.set(d, (k = new Set()));
+              k.add(pr);
+            }
+          }
+        }
+        const me = { targets: new Set(targets), props, killed: new Map<DecoState, Set<string>>() };
+        this.decoMoves.push(me);
         for (const d of targets) {
           if (a.visible !== undefined) d.visible = a.visible;
           if (a.image !== undefined) d.image = a.image || null;
@@ -800,33 +833,41 @@ export class VisualTimeline {
             const k = ease(a.ease as EaseName | undefined, p);
             targets.forEach((d, j) => {
               const f = from[j];
+              const kd = me.killed.get(d);
+              const on = (pr: string) => !kd || !kd.has(pr);
+              const n = <T>(v: T | null, pr: string): T | null => (on(pr) ? v : null);
               if (a.offset) {
                 // 지금 자리 기준(last)이면 이동량을 지금 위치에 더한다
                 const rel = a.relativeTo === 'last';
-                d.ox = to(a.offset[0] === null ? null : rel ? f.ox + a.offset[0] : a.offset[0], f.ox, k);
-                d.oy = to(a.offset[1] === null ? null : rel ? f.oy + a.offset[1] : a.offset[1], f.oy, k);
+                if (on('ox')) d.ox = to(a.offset[0] === null ? null : rel ? f.ox + a.offset[0] : a.offset[0], f.ox, k);
+                if (on('oy')) d.oy = to(a.offset[1] === null ? null : rel ? f.oy + a.offset[1] : a.offset[1], f.oy, k);
               }
-              if (a.rotation !== undefined) d.rot = lerp(f.rot, a.rotation, k);
+              if (a.rotation !== undefined && on('rot')) d.rot = lerp(f.rot, a.rotation, k);
               if (a.scale) {
-                d.sx = to(a.scale[0], f.sx, k);
-                d.sy = to(a.scale[1], f.sy, k);
+                if (on('sx')) d.sx = to(n(a.scale[0], 'sx'), f.sx, k);
+                if (on('sy')) d.sy = to(n(a.scale[1], 'sy'), f.sy, k);
               }
               if (a.parallax) {
-                d.parx = to(a.parallax[0], f.parx, k);
-                d.pary = to(a.parallax[1], f.pary, k);
+                if (on('parx')) d.parx = to(a.parallax[0], f.parx, k);
+                if (on('pary')) d.pary = to(a.parallax[1], f.pary, k);
               }
               if (a.parallaxOffset) {
-                d.pox = to(a.parallaxOffset[0], f.pox, k);
-                d.poy = to(a.parallaxOffset[1], f.poy, k);
+                if (on('pox')) d.pox = to(a.parallaxOffset[0], f.pox, k);
+                if (on('poy')) d.poy = to(a.parallaxOffset[1], f.poy, k);
               }
               if (a.pivot) {
-                d.pvx = to(a.pivot[0], f.pvx, k);
-                d.pvy = to(a.pivot[1], f.pvy, k);
+                if (on('pvx')) d.pvx = to(a.pivot[0], f.pvx, k);
+                if (on('pvy')) d.pvy = to(a.pivot[1], f.pvy, k);
               }
-              if (a.alpha !== undefined) d.calpha = lerp(f.calpha, a.alpha, k);
-              if (col !== null) d.color = p >= 1 ? col : lerpColor(f.color, col, p);
-              if (a.opacity !== undefined) d.opacity = lerp(f.opacity, a.opacity, k);
+              if (a.alpha !== undefined && on('calpha')) d.calpha = lerp(f.calpha, a.alpha, k);
+              if (col !== null && on('color')) d.color = p >= 1 ? col : lerpColor(f.color, col, p);
+              if (a.opacity !== undefined && on('opacity')) d.opacity = lerp(f.opacity, a.opacity, k);
             });
+            // 끝난 움직임은 목록에서 뺀다
+            if (p >= 1) {
+              const i = this.decoMoves.indexOf(me);
+              if (i >= 0) this.decoMoves.splice(i, 1);
+            }
           },
         };
       }

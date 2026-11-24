@@ -310,6 +310,8 @@ function validateDecoration(d: unknown, tileCount: number): string | null {
   if (d.visible !== undefined && typeof d.visible !== 'boolean') return 'visible은 true/false여야 합니다.';
   if (d.blend !== undefined && !(DECO_BLENDS as string[]).includes(d.blend as string)) return `blend는 ${DECO_BLENDS.join(', ')} 중 하나여야 합니다.`;
   if (d.mask !== undefined && !['mask', 'inside', 'outside'].includes(d.mask as string)) return "mask는 'mask', 'inside', 'outside' 중 하나여야 합니다.";
+  if (d.maskRange !== undefined && !(Array.isArray(d.maskRange) && d.maskRange.length === 2 && d.maskRange.every((v) => typeof v === 'number' && Number.isFinite(v))))
+    return 'maskRange는 [숫자, 숫자]여야 합니다.';
   if (d.smooth !== undefined && typeof d.smooth !== 'boolean') return 'smooth는 true/false여야 합니다.';
   for (const k of ['lockRotation', 'lockScale']) if (d[k] !== undefined && typeof d[k] !== 'boolean') return `${k}는 true/false여야 합니다.`;
   return [str('tag'), str('image'), str('text'), vec('position'), vec('pivot'), vec('scale'), vec('parallax'), vec('parallaxOffset'), vec('tile'), n('rotation'), n('opacity'), n('alpha'), n('depth'), n('fontSize')].find((x) => x) ?? null;

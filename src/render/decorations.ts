@@ -52,6 +52,20 @@ interface Obj {
   ps?: PSys;
   /** 지금 걸린 가리기 (inside/outside) */
   masked: 'inside' | 'outside' | null;
+  /** 지금 가리는 가림막 묶음 키 */
+  maskKey?: string | null;
+}
+
+/**
+ * 가림막 묶음: 같은 깊이 범위를 가리는 가림막들을 한 그림으로 그린다 (원작 SpriteMask 사용자 범위).
+ * range가 null이면 범위 없는 가림막 = 모든 가려질 장식.
+ */
+interface MaskGroup {
+  range: [number, number] | null;
+  layer: Container;
+  rt: RenderTexture | null;
+  sprite: Sprite;
+  used: boolean;
 }
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
@@ -183,13 +197,8 @@ export class DecorationView {
   private preloaded = false;
   private lastTime: number | null = null;
   private destroyed = false;
-  /** 가림막 장식들 (화면에 그리지 않고, 매 프레임 가림막 그림으로만 그린다) */
-  private readonly maskLayer = new Container();
-  private maskRT: RenderTexture | null = null;
-  /** 가림막 그림을 화면 전체에 까는 스프라이트 (가려질 장식들의 mask) */
-  private readonly maskSprite = new Sprite(Texture.EMPTY);
-  /** 이번 프레임에 가림막·가려질 장식이 보이는지 */
-  private maskUsed = false;
+  /** 가림막 묶음 (깊이 범위별) — 가림막 장식은 화면에 그리지 않고 매 프레임 묶음마다 가림막 그림으로만 그린다 */
+  private readonly maskGroups = new Map<string, MaskGroup>();
   /** 픽셀 그대로 그릴 그림 이름 (원작 imageSmoothing 끔) */
   private readonly nearest = new Set<string>();
   /** 배경처럼 크게 쓰는 그림 이름 · 지금 크게 올라가 있는 그림 */
@@ -218,17 +227,33 @@ export class DecorationView {
     }
     for (const d of tl.decos) {
       const o = this.makeObj(d);
-      this.place(o, d.def.mask ?? null, d.def.depth ?? -1);
+      this.place(o, d.def.mask ?? null, d.def.depth ?? -1, d.def.maskRange);
       this.objs.push(o);
       if (d.def.smooth === false && d.def.image) this.nearest.add(d.def.image);
     }
   }
 
   /** 깊이·가리기에 맞는 층에 둔다 (가림막은 화면에 안 그리는 층). */
-  private place(o: Obj, mask: string | null, depth: number): void {
-    const want = mask === 'mask' ? this.maskLayer : depth >= 0 ? this.behind : this.front;
+  private place(o: Obj, mask: string | null, depth: number, range?: [number, number]): void {
+    const want = mask === 'mask' ? this.maskGroup(range ?? null).layer : depth >= 0 ? this.behind : this.front;
     o.node.zIndex = -depth;
     if (o.node.parent !== want) want.addChild(o.node);
+  }
+
+  private maskGroup(range: [number, number] | null): MaskGroup {
+    const key = range ? `${range[0]}:${range[1]}` : 'all';
+    let g = this.maskGroups.get(key);
+    if (!g) {
+      g = { range, layer: new Container(), rt: null, sprite: new Sprite(Texture.EMPTY), used: false };
+      this.maskGroups.set(key, g);
+    }
+    return g;
+  }
+
+  /** 이 깊이의 가려질 장식을 가리는 묶음 키 (범위가 맞는 것 먼저, 없으면 범위 없는 묶음, 그것도 없으면 null) */
+  private maskKeyFor(depth: number): string | null {
+    for (const [k, g] of this.maskGroups) if (g.range && depth >= g.range[0] && depth <= g.range[1]) return k;
+    return this.maskGroups.has('all') ? 'all' : null;
   }
 
   get count(): number {
@@ -707,7 +732,7 @@ export class DecorationView {
     // 화면에 필요한 해상도는 이번 프레임에 보이는 장식으로 새로 잰다 (줄어들면 다음에 올릴 때만 반영)
     const need = new Map<string, number>();
     const hidden = (window as unknown as { __orbitHide?: Set<string> }).__orbitHide;
-    this.maskUsed = false;
+    for (const g of this.maskGroups.values()) g.used = false;
     let waiting = 0;
     const rc = degToRad(camRot);
     const cos = Math.cos(-rc);
@@ -730,21 +755,27 @@ export class DecorationView {
       const def = d.def;
       if (o.ps) this.stepParticles(o.ps, d, dt, rewound, time ?? 0);
       // 깊이·가리기 바뀜 (원작 MoveDecorations)
-      if (node.zIndex !== -d.depth || (d.mask === 'mask') !== (node.parent === this.maskLayer)) this.place(o, d.mask, d.depth);
       const isMask = d.mask === 'mask';
+      const inMaskLayer = !!node.parent && node.parent !== this.behind && node.parent !== this.front;
+      if (node.zIndex !== -d.depth || isMask !== inMaskLayer) this.place(o, d.mask, d.depth, def.maskRange);
       // 가림막은 투명도와 상관없이 모양만 쓴다 (원작 SpriteMask)
       node.visible = d.visible && (isMask || d.opacity * d.calpha > 0.001) && (!o.ps || o.ps.live.length > 0);
       // 자동 시험용: 이름으로 장식 숨기기 (원작과 비교할 때 어느 장식이 덮는지 찾기)
       if (hidden && ((d.image && hidden.has(d.image)) || d.tags.some((t) => hidden.has(t)))) node.visible = false;
       const want = d.mask === 'inside' || d.mask === 'outside' ? d.mask : null;
-      if (want !== o.masked) {
+      // 원작 가림막은 깊이 범위가 맞는 장식만 가린다 — 하나로 합치면 QuomodocunquizE 배경 가림막 안에 제목·로고가 계속 보였다
+      const key = want ? this.maskKeyFor(d.depth) : null;
+      if (want !== o.masked || key !== o.maskKey) {
         o.masked = want;
+        o.maskKey = key;
         // 원작 가림막은 모양(알파)만 본다 — 빨강 채널을 쓰면 검게 칠한 가림막이 없는 것처럼 돼 화면이 까매진다
-        if (want) node.setMask({ mask: this.maskSprite, inverse: want === 'outside', channel: 'alpha' });
+        if (want && key) node.setMask({ mask: this.maskGroups.get(key)!.sprite, inverse: want === 'outside', channel: 'alpha' });
         else node.mask = null;
       }
+      // 가릴 가림막이 하나도 없으면: 안에서만 보이는 장식은 안 보이고, 밖에서만 보이는 장식은 그대로
+      if (want === 'inside' && !key) node.visible = false;
       if (!node.visible) continue;
-      if (isMask || want) this.maskUsed = true;
+      if (want && key) this.maskGroups.get(key)!.used = true;
       // 이미지 교체·지연 로드
       if (o.image) this.lastUsed.set(o.image, now);
       if ((node instanceof Sprite || node instanceof TilingSprite) && d.image !== o.image) {
@@ -993,24 +1024,28 @@ export class DecorationView {
    * worldTransform: 월드 → 화면 변환.
    */
   renderMask(renderer: Renderer, worldTransform: Matrix, width: number, height: number): void {
-    if (!this.maskUsed) return;
     const res = renderer.resolution;
     const w = Math.max(1, Math.ceil(width));
     const h = Math.max(1, Math.ceil(height));
-    if (!this.maskRT || this.maskRT.width !== w || this.maskRT.height !== h || this.maskRT.source.resolution !== res) {
-      this.maskRT?.destroy(true);
-      this.maskRT = RenderTexture.create({ width: w, height: h, resolution: res });
-      this.maskSprite.texture = this.maskRT;
+    for (const g of this.maskGroups.values()) {
+      if (!g.used) continue;
+      if (!g.rt || g.rt.width !== w || g.rt.height !== h || g.rt.source.resolution !== res) {
+        g.rt?.destroy(true);
+        g.rt = RenderTexture.create({ width: w, height: h, resolution: res });
+        g.sprite.texture = g.rt;
+      }
+      renderer.render({ container: g.layer, target: g.rt, clear: true, clearColor: [0, 0, 0, 0], transform: worldTransform });
     }
-    renderer.render({ container: this.maskLayer, target: this.maskRT, clear: true, clearColor: [0, 0, 0, 0], transform: worldTransform });
   }
 
   destroy(): void {
     this.destroyed = true;
     for (const list of this.cells.values()) for (const t of list) t.destroy();
-    this.maskLayer.destroy({ children: true });
-    this.maskSprite.destroy();
-    this.maskRT?.destroy(true);
+    for (const g of this.maskGroups.values()) {
+      g.layer.destroy({ children: true });
+      g.sprite.destroy();
+      g.rt?.destroy(true);
+    }
     this.behind.destroy({ children: true });
     this.front.destroy({ children: true });
     for (const t of this.tex.values()) if (t && t !== 'loading') t.destroy(true);

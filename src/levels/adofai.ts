@@ -422,6 +422,12 @@ function decoFrom(e: Record<string, unknown>, floor: number, isText: boolean): D
   if (blend) d.blend = blend;
   const mask = maskFrom(e.maskingType);
   if (mask && mask !== 'none') d.mask = mask;
+  // 가림막의 깊이 범위: 원작 SpriteMask 사용자 범위 — 그 깊이의 장식만 가린다 (QuomodocunquizE 제목·로고 가림막 17개가 모두 이 방식)
+  if (mask === 'mask' && (e.useMaskingDepth === true || e.useMaskingDepth === 'Enabled')) {
+    const f = num(e.maskingFrontDepth, -1);
+    const b = num(e.maskingBackDepth, -1);
+    d.maskRange = [Math.min(f, b), Math.max(f, b)];
+  }
   if (e.imageSmoothing === false) d.smooth = false;
   if (e.lockRotation === true) d.lockRotation = true;
   if (e.lockScale === true) d.lockScale = true;

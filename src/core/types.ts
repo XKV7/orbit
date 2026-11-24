@@ -421,6 +421,8 @@ export interface Decoration {
   blend?: DecoBlend;
   /** 가리기 (원작 maskingType): mask = 가림막(안 보임), inside = 가림막 안에서만, outside = 가림막 밖에서만 */
   mask?: DecoMask;
+  /** 가림막(mask)이 가리는 장식의 깊이 범위 [작은 값, 큰 값] (원작 useMaskingDepth·maskingFront/BackDepth). 없으면 모든 가려질 장식. */
+  maskRange?: [number, number];
   /** false면 그림을 부드럽게 늘리지 않고 픽셀 그대로 (원작 imageSmoothing) */
   smooth?: boolean;
   /** 카메라 회전·확대와 상관없이 화면에서 같은 방향·크기 */

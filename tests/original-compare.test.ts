@@ -77,3 +77,52 @@ describe('원작 CustomBackground imageColor 알파', () => {
     expect((bg as { opacity?: number }).opacity).toBeCloseTo(0x70 / 255);
   });
 });
+
+describe('원작 MoveDecorations (DOTween)', () => {
+  it('새 이동이 같은 장식·같은 속성의 진행 중인 움직임을 멈춘다', () => {
+    const r = level({
+      angleData: [0, 0, 0, 0, 0, 0, 0, 0],
+      decorations: [{ floor: 0, eventType: 'AddDecoration', decorationImage: 'a.png', tag: 'ff5', position: [0, 0], relativeTo: 'Tile', scale: [100, 100] }],
+      actions: [
+        { floor: 1, eventType: 'MoveDecorations', tag: 'ff5', duration: 4, scale: [2222, 2222], ease: 'Linear' },
+        { floor: 3, eventType: 'MoveDecorations', tag: 'ff5', duration: 0, scale: [0, 0] },
+      ],
+    });
+    const ch = compileChart(r.level);
+    const tl = new VisualTimeline(ch);
+    for (let t = ch.tiles[1].time; t <= ch.tiles[7].time; t += 0.05) tl.update(t);
+    const d = tl.decos.find((x) => x.tags.includes('ff5'))!;
+    expect(d.sx).toBe(0); // 예전: 앞의 키우기가 끝까지 돌아 22배
+  });
+  it('다른 속성의 움직임은 계속된다', () => {
+    const r = level({
+      angleData: [0, 0, 0, 0, 0, 0, 0, 0],
+      decorations: [{ floor: 0, eventType: 'AddDecoration', decorationImage: 'a.png', tag: 'd', position: [0, 0], relativeTo: 'Tile', scale: [100, 100] }],
+      actions: [
+        { floor: 1, eventType: 'MoveDecorations', tag: 'd', duration: 4, rotationOffset: 90, ease: 'Linear' },
+        { floor: 2, eventType: 'MoveDecorations', tag: 'd', duration: 0, scale: [50, 50] },
+      ],
+    });
+    const ch = compileChart(r.level);
+    const tl = new VisualTimeline(ch);
+    for (let t = ch.tiles[1].time; t <= ch.tiles[7].time; t += 0.05) tl.update(t);
+    const d = tl.decos.find((x) => x.tags.includes('d'))!;
+    expect(d.rot).toBeCloseTo(90);
+    expect(d.sx).toBeCloseTo(0.5);
+  });
+});
+
+describe('원작 가림막 깊이 범위 (useMaskingDepth)', () => {
+  it('가림막의 front/back 깊이를 범위로 옮긴다', () => {
+    const r = level({
+      angleData: [0, 0, 0],
+      decorations: [
+        { floor: 0, eventType: 'AddDecoration', decorationImage: 'm.png', tag: 'm', maskingType: 'Mask', useMaskingDepth: true, maskingFrontDepth: -66, maskingBackDepth: -67 },
+        { floor: 0, eventType: 'AddDecoration', decorationImage: 'n.png', tag: 'n', maskingType: 'Mask', useMaskingDepth: false },
+      ],
+    });
+    const ds = r.level.decorations ?? [];
+    expect(ds.find((d) => d.tag === 'm')).toMatchObject({ mask: 'mask', maskRange: [-67, -66] });
+    expect(ds.find((d) => d.tag === 'n')?.maskRange).toBeUndefined();
+  });
+});
