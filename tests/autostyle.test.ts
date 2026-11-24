@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countOverlaps, layoutBest, levelFromHits } from '../src/core/autochart';
+import { countOverlaps, layoutBest, levelFromHits, multiHitCount, overlapsBesidesMultiHits } from '../src/core/autochart';
 import { compileChart } from '../src/core/chart';
 
 /** 64마디: 정박 + 가끔 반박, 16박마다 크래시 */
@@ -21,7 +21,8 @@ describe('자동 맵 꾸미기 (원작 맵처럼)', () => {
     expect(tws.length / n).toBeGreaterThan(0.1);
     expect(tws.length / n).toBeLessThanOrEqual(0.32);
     const intervals = hits().map((b, i, a) => b - (i ? a[i - 1] : 0));
-    expect(countOverlaps(r.level.path)).toBeLessThanOrEqual(countOverlaps(layoutBest(intervals).path));
+    const mids = r.level.actions.filter((a) => a.type === 'Midspin').map((a) => a.floor);
+    expect(overlapsBesidesMultiHits(r.level.path, mids)).toBeLessThanOrEqual(countOverlaps(layoutBest(intervals).path));
   });
 
   it('센 강박에 동타(미드스핀) — 같은 순간 두 번, 나머지 박자는 그대로', () => {
@@ -63,5 +64,32 @@ describe('자동 맵 꾸미기 (원작 맵처럼)', () => {
     const ch = compileChart(r.level);
     // 보이는 꺾임이 45°(0.25박)인 타일이 없다
     expect(ch.tiles.filter((t) => Math.abs(t.beats - 0.25) < 1e-6).length).toBe(0);
+  });
+
+  it('동타 수는 소리가 셀수록 많다 (2·3·4·6·8·10·12·16, 난이도별 최대)', () => {
+    expect(multiHitCount(0, 5)).toBe(2);
+    expect(multiHitCount(1, 5)).toBe(16);
+    expect(multiHitCount(0.5, 5)).toBe(8);
+    expect(multiHitCount(1, 2)).toBe(3);
+    expect(multiHitCount(1, 3)).toBe(6);
+    const xs = [0, 0.2, 0.4, 0.6, 0.8, 1].map((r) => multiHitCount(r, 4));
+    for (let i = 1; i < xs.length; i++) expect(xs[i]).toBeGreaterThanOrEqual(xs[i - 1]);
+    // 실제 맵: 가장 센 강박의 동타가 더 많다
+    const r = levelFromHits(hits(), 140, 1, { style: 5, accent: (b) => (Math.abs(b / 64 - Math.round(b / 64)) < 1e-6 ? 9 : accent(b)) })!;
+    const ch = compileChart(r.level);
+    const groups: number[] = [];
+    let run = 0;
+    for (const t of ch.tiles) {
+      if (t.midspin) run++;
+      else if (run) {
+        groups.push(run + 1);
+        run = 0;
+      }
+    }
+    expect(groups.length).toBeGreaterThan(0);
+    expect(Math.max(...groups)).toBeGreaterThan(2);
+    const mids = r.level.actions.filter((a) => a.type === 'Midspin').map((a) => a.floor);
+    const intervals = hits().map((b, i, a) => b - (i ? a[i - 1] : 0));
+    expect(overlapsBesidesMultiHits(r.level.path, mids)).toBeLessThanOrEqual(countOverlaps(layoutBest(intervals).path));
   });
 });

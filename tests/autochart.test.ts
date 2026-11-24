@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoChart, layoutBeats } from '../src/core/autochart';
+import { autoChart, layoutBeats, overlapsBesidesMultiHits } from '../src/core/autochart';
 import { compileChart } from '../src/core/chart';
 import { validateLevel } from '../src/core/level';
 import { TILE_LEN } from '../src/core/math';
@@ -77,9 +77,11 @@ describe('자동 레벨 생성', () => {
     for (const d of ['easy', 'normal', 'hard'] as const) {
       const r = autoChart(song, SR, { difficulty: d })!;
       const c = compileChart(r.level);
-      const fastest = Math.min(...c.tiles.slice(0, -1).map((t) => t.duration));
+      // 동타(미드스핀, 같은 순간)는 빼고
+      const fastest = Math.min(...c.tiles.slice(0, -1).filter((t) => !t.midspin).map((t) => t.duration));
       expect(fastest).toBeGreaterThanOrEqual(0.2 - 1e-9);
-      expect(overlaps(r.level.path)).toBeLessThanOrEqual(Math.ceil(c.tiles.length * 0.02));
+      const mids = r.level.actions.filter((a) => a.type === 'Midspin').map((a) => a.floor);
+      expect(mids.length ? overlapsBesidesMultiHits(r.level.path, mids) : overlaps(r.level.path)).toBeLessThanOrEqual(Math.ceil(c.tiles.length * 0.02));
     }
   });
 
