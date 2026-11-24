@@ -971,8 +971,10 @@ export class Game {
     // 흐림·빛 번짐 계산 해상도 (자동 화질) — 바탕은 늘 화면 해상도
     this.screenFx.soft = stage.softScale;
     if (this.backFx) this.backFx.soft = stage.softScale;
-    const glowFs = this.screenFx.worldFilters(tl.bloom, reduce, this.chart.level.settings.glow ?? 1);
-    const wideGlow = this.screenFx.bloomWide(tl.bloom);
+    // 원작 레벨은 원작 Bloom 방식 (화면 전체·색 그대로·좁은 빛)
+    const fromAdofai = this.chart.level.meta.origin === 'adofai';
+    const glowFs = this.screenFx.worldFilters(tl.bloom, reduce, this.chart.level.settings.glow ?? 1, fromAdofai);
+    const wideGlow = this.screenFx.bloomWide(tl.bloom, fromAdofai);
     const worldFs = wideGlow ? [] : glowFs;
     stage.setWorldFilters(worldFs);
     const scroll: [number, number] = [tl.screenScroll[0] * tr, tl.screenScroll[1] * tr];

@@ -736,6 +736,8 @@ export function convertAdofai(text: string): AdofaiResult {
   // ── 설정
   const s = (typeof r.settings === 'object' && r.settings !== null ? r.settings : {}) as Record<string, unknown>;
   const settings = defaultSettings();
+  // 원작 legacyFlash (예전 레벨은 칸이 없음 = 예전 방식): 플래시가 하나뿐
+  const legacyFlash = s.legacyFlash === undefined ? true : s.legacyFlash === true || s.legacyFlash === 'Enabled';
   settings.bpm = Math.max(0.001, Math.min(MAX_BPM, num(s.bpm, 100)));
   // 원작 offset = 첫 타일(floor 1)을 누르는 순간. ORBIT offset = 타일 0 시각 → 아래에서 첫 회전만큼 당긴다.
   const firstHit = num(s.offset, 0) / 1000;
@@ -811,7 +813,8 @@ export function convertAdofai(text: string): AdofaiResult {
       ...(str(s.bgVideo).trim()
         ? { video: str(s.bgVideo).split(/[\\/]/).pop()!, videoOffset: num(s.vidOffset, 0) / 1000, videoLoop: str(s.loopVideo) === 'Enabled' || s.loopVideo === true }
         : {}),
-      ...(img ? { fit: mode === 'Unscaled' ? 'unscaled' : mode === 'Tiled' ? 'tile' : 'cover', opacity: 1, ...(tint && tint !== '#ffffff' ? { tint } : {}) } : {}),
+      // imageColor의 알파 = 배경 그림 불투명도 (배경색 위에 비친다)
+      ...(img ? { fit: mode === 'Unscaled' ? 'unscaled' : mode === 'Tiled' ? 'tile' : 'cover', opacity: adofaiAlpha(s.bgImageColor), ...(tint && tint !== '#ffffff' ? { tint } : {}) } : {}),
     } as Action);
   }
   // 타격음 (원작 기본 Kick)
@@ -933,7 +936,10 @@ export function convertAdofai(text: string): AdofaiResult {
       }
       case 'MoveCamera': {
         const cam: Action = { floor, type: 'Camera', duration: dur(e.duration, 1) };
-        if (e.zoom !== undefined && e.zoom !== null) cam.zoom = Math.max(0.05, Math.min(20, 100 / Math.max(1, num(e.zoom, 100))));
+        if (e.zoom !== undefined && e.zoom !== null) {
+          cam.zoom = Math.max(0.05, Math.min(20, 100 / Math.max(1, num(e.zoom, 100))));
+          cam.viewLerp = true;
+        }
         if (e.rotation !== undefined && e.rotation !== null) cam.rotation = num(e.rotation, 0);
         // 빈 축(null)은 그 축을 그대로 둔다 (ofnr 10582: y만 바꾸는 이벤트가 x를 0으로 되돌려 마법진이 화면 오른쪽으로 치우쳤다)
         if (Array.isArray(e.position) && e.position.some((v) => v !== null && v !== undefined)) {
@@ -967,6 +973,7 @@ export function convertAdofai(text: string): AdofaiResult {
           endColor,
           endOpacity: pct(e.endOpacity, 0),
           ...(str(e.plane) === 'Background' ? { plane: 'bg' as const } : {}),
+          ...(legacyFlash ? { legacy: true } : {}),
           duration: dur(e.duration, 1),
         });
         break;
@@ -1018,7 +1025,8 @@ export function convertAdofai(text: string): AdofaiResult {
           type: 'Background',
           ...(c ? { color: c } : {}),
           image: img,
-          ...(img ? { fit, opacity: 1, ...(tint && tint !== '#ffffff' ? { tint } : {}) } : {}),
+          // imageColor의 알파 = 배경 그림 불투명도 (Terrasphere 1:29 'ffffff70' — 원작은 배경이 어둡게 비친다)
+          ...(img ? { fit, opacity: adofaiAlpha(e.imageColor), ...(tint && tint !== '#ffffff' ? { tint } : {}) } : {}),
         });
         break;
       }

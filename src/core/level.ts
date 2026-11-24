@@ -413,12 +413,14 @@ function validateActionParams(a: Record<string, unknown>, type: ActionType, tile
       if (a.relativeTo !== undefined && !['player', 'tile', 'global', 'last'].includes(a.relativeTo as string))
         return "relativeTo는 'player', 'tile', 'global', 'last' 중 하나여야 합니다.";
       if (a.tile !== undefined && (!isNum(a.tile) || !Number.isInteger(a.tile) || a.tile < 0 || a.tile >= tileCount)) return 'tile은 타일 번호여야 합니다.';
+      if (a.viewLerp !== undefined && typeof a.viewLerp !== 'boolean') return 'viewLerp는 true/false여야 합니다.';
       return first(optNum('zoom', 0.05, 20), optNum('rotation'), vecN('offset'), optNum('duration', 0, MAX_EFFECT_BEATS), easeOk());
     case 'Flash':
       return first(
         a.color !== undefined && !isColor(a.color) ? 'color 형식이 잘못되었습니다.' : null,
         a.endColor !== undefined && !isColor(a.endColor) ? 'endColor 형식이 잘못되었습니다.' : null,
         a.plane !== undefined && a.plane !== 'fg' && a.plane !== 'bg' ? "plane은 'fg' 또는 'bg'여야 합니다." : null,
+        a.legacy !== undefined && typeof a.legacy !== 'boolean' ? 'legacy는 true/false여야 합니다.' : null,
         optNum('opacity', 0, 1),
         optNum('endOpacity', 0, 1),
         optNum('duration', 0, MAX_EFFECT_BEATS),

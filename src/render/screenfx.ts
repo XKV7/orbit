@@ -48,8 +48,12 @@ function mul(a: Mat, b: Mat): Mat {
 function mix(m: Mat, k: number): Mat {
   return m.map((v, i) => ID[i] + (v - ID[i]) * k);
 }
-const GRAY: Mat = [0.3, 0.59, 0.11, 0, 0, 0.3, 0.59, 0.11, 0, 0, 0.3, 0.59, 0.11, 0, 0, 0, 0, 0, 1, 0];
-const SEPIA: Mat = [0.393, 0.769, 0.189, 0, 0, 0.349, 0.686, 0.168, 0, 0, 0.272, 0.534, 0.131, 0, 0, 0, 0, 0, 1, 0];
+// 원작 Grayscale = Rec.601 밝기 (원작 에디터 시험: 파랑 64·128·255 → 123)
+const GRAY: Mat = [0.299, 0.587, 0.114, 0, 0, 0.299, 0.587, 0.114, 0, 0, 0.299, 0.587, 0.114, 0, 0, 0, 0, 0, 1, 0];
+// 원작 Sepia = 밝기 + 갈색 (112, 43, 20)/255 (원작 에디터 시험: 회색 51 → 166·92·65, 검정도 짙은 갈색)
+const SEPIA: Mat = [0.299, 0.587, 0.114, 0, 112 / 255, 0.299, 0.587, 0.114, 0, 43 / 255, 0.299, 0.587, 0.114, 0, 20 / 255, 0, 0, 0, 1, 0];
+// 원작 EightiesTV의 색 (원작 에디터 시험, 세기 100): 따뜻하고 대비가 세다 (회색 102 → 169·132·123, 153 → 243·216·207)
+const TV80: Mat = [1.8, 0, 0, 0, -0.129, 0, 1.65, 0, 0, -0.146, 0, 0, 1.57, 0, -0.129, 0, 0, 0, 1, 0];
 const INVERT: Mat = [-1, 0, 0, 0, 1, 0, -1, 0, 0, 1, 0, 0, -1, 0, 1, 0, 0, 0, 1, 0];
 const NIGHT: Mat = [0.1, 0.4, 0, 0, 0, 0.3, 1, 0.3, 0, 0.05, 0, 0.4, 0.1, 0, 0, 0, 0, 0, 1, 0];
 function contrast(c: number): Mat {
@@ -111,6 +115,7 @@ uniform float uSharp;
 uniform float uManga;
 uniform vec3 uAura;
 uniform float uPlasma;
+uniform float uDraw;
 
 vec2 toTex(vec2 s) { return s * uOutputFrame.zw * uInputSize.zw; }
 vec4 samp(vec2 s) { return texture(uTexture, clamp(toTex(s), uInputClamp.xy, uInputClamp.zw)); }
@@ -253,6 +258,13 @@ void main() {
     float line = step(0.5, rnd) * thin * smoothstep(0.22 + 0.25 * rnd, 0.75, length(d));
     c.rgb = mix(c.rgb, vec3(1.0), clamp(line * uManga * 0.8, 0.0, 1.0));
   }
+  // 원작 Drawing (원작 에디터 시험으로 잼): 종이 회색(225) × (0.55 + 0.55 × 가장 밝은 채널)인 '스케치'와 세기만큼 섞는다
+  // (세기 35: 51→86, 255→245, 파랑 64·128·255 → 118·160·242). 원작의 구겨진 종이 무늬·연필 윤곽은 없음.
+  if (uDraw > 0.0) {
+    float v = max(c.r, max(c.g, c.b)) / max(c.a, 0.0001);
+    vec3 sk = vec3(0.882 * min(1.0, 0.55 + 0.55 * v)) * c.a;
+    c.rgb = mix(c.rgb, sk, uDraw);
+  }
   finalColor = c;
 }`;
 
@@ -301,6 +313,7 @@ class DistortFilter extends Filter {
           uManga: { value: 0, type: 'f32' },
           uAura: { value: new Float32Array([0, 0, 0]), type: 'vec3<f32>' },
           uPlasma: { value: 0, type: 'f32' },
+          uDraw: { value: 0, type: 'f32' },
         }),
       },
     });
@@ -315,8 +328,15 @@ in vec2 vTextureCoord;
 out vec4 finalColor;
 uniform sampler2D uTexture;
 uniform float uThr;
+uniform float uLuma;
 void main() {
   vec4 c = texture(uTexture, vTextureCoord);
+  if (uLuma > 0.5) {
+    // 원작 Bloom: 밝기(Rec.601)가 문턱을 넘은 픽셀을 그대로 뽑는다 (넘은 만큼이 아니라 색 전체)
+    float y = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+    finalColor = vec4(c.rgb * smoothstep(uThr - 0.004, uThr + 0.004, y), 1.0);
+    return;
+  }
   // 밝기보다 '흰 정도'(가장 약한 채널) 위주 — 원작처럼 흰 타일은 빛나고 하늘색 타일은 덜 빛나게
   float l = 0.25 * max(c.r, max(c.g, c.b)) + 0.75 * min(c.r, min(c.g, c.b));
   // 문턱을 넘은 만큼 부드럽게
@@ -366,11 +386,15 @@ class ExtractFilter extends Filter {
   constructor() {
     super({
       glProgram: GlProgram.from({ vertex: VERT, fragment: EXTRACT_FRAG, name: 'orbit-extract', preferredVertexPrecision: 'highp', preferredFragmentPrecision: 'highp' }),
-      resources: { exU: new UniformGroup({ uThr: { value: 0.5, type: 'f32' } }) },
+      resources: { exU: new UniformGroup({ uThr: { value: 0.5, type: 'f32' }, uLuma: { value: 0, type: 'f32' } }) },
     });
   }
   set threshold(v: number) {
     (this.resources.exU as { uniforms: { uThr: number } }).uniforms.uThr = v;
+  }
+  /** true = 원작 Bloom 방식 (밝기 문턱을 넘은 픽셀 색 전체) */
+  set luma(v: boolean) {
+    (this.resources.exU as { uniforms: { uLuma: number } }).uniforms.uLuma = v ? 1 : 0;
   }
 }
 
@@ -382,10 +406,11 @@ uniform sampler2D uMapTexture;
 uniform sampler2D uMap2Texture;
 uniform float uScale;
 uniform vec3 uColor;
+uniform vec2 uMix;
 void main() {
   vec4 c = texture(uTexture, vTextureCoord);
   // 좁은 빛(가장자리 광채) + 넓은 빛(빛무리)
-  vec3 g = texture(uMapTexture, vTextureCoord).rgb * 0.7 + texture(uMap2Texture, vTextureCoord).rgb * 1.3;
+  vec3 g = texture(uMapTexture, vTextureCoord).rgb * uMix.x + texture(uMap2Texture, vTextureCoord).rgb * uMix.y;
   finalColor = vec4(c.rgb + g * uScale * uColor, c.a);
 }`;
 
@@ -404,20 +429,27 @@ class GlowFilter extends Filter {
         glowU: new UniformGroup({
           uScale: { value: 1, type: 'f32' },
           uColor: { value: new Float32Array([1, 1, 1]), type: 'vec3<f32>' },
+          uMix: { value: new Float32Array([0.7, 1.3]), type: 'vec2<f32>' },
         }),
         uMapTexture: Texture.WHITE.source,
         uMap2Texture: Texture.WHITE.source,
       },
     });
   }
-  get u(): { uScale: number; uColor: Float32Array } {
-    return (this.resources.glowU as { uniforms: { uScale: number; uColor: Float32Array } }).uniforms;
+  get u(): { uScale: number; uColor: Float32Array; uMix: Float32Array } {
+    return (this.resources.glowU as { uniforms: { uScale: number; uColor: Float32Array; uMix: Float32Array } }).uniforms;
   }
-  set(threshold: number, scale: number, color: number, blurPx: number): void {
+  /** 원작 Bloom 방식: 넓은 빛무리 없이 좁게만 */
+  private narrowOnly = false;
+  set(threshold: number, scale: number, color: number, blurPx: number, adofai = false): void {
     this.extract.threshold = Math.max(0, Math.min(0.99, threshold));
-    this.kawase.strength = blurPx * 0.3;
+    this.extract.luma = adofai;
+    this.narrowOnly = adofai;
+    this.kawase.strength = adofai ? blurPx : blurPx * 0.3;
     this.kawase2.strength = blurPx;
     const u = this.u;
+    u.uMix[0] = adofai ? 1 : 0.7;
+    u.uMix[1] = adofai ? 0 : 1.3;
     u.uScale = scale;
     u.uColor[0] = ((color >> 16) & 255) / 255;
     u.uColor[1] = ((color >> 8) & 255) / 255;
@@ -431,7 +463,7 @@ class GlowFilter extends Filter {
     const blurred = aligned(input, this.soft);
     this.kawase.apply(fm, bright, blurred, true);
     const wide = aligned(input, this.soft * 0.5);
-    this.kawase2.apply(fm, blurred, wide, true);
+    if (!this.narrowOnly) this.kawase2.apply(fm, blurred, wide, true);
     this.resources.uMapTexture = blurred.source;
     this.resources.uMap2Texture = wide.source;
     fm.applyFilter(this, input, output, clear);
@@ -515,12 +547,13 @@ export class ScreenFx {
     const apply = (mat: Mat, amt: number) => {
       if (amt > 0) m = mul(m, mix(mat, Math.min(1, amt)));
     };
-    apply(GRAY, any('Grayscale', 'Drawing', 'FiftiesTV'));
+    apply(GRAY, any('Grayscale', 'FiftiesTV'));
     apply(SEPIA, k('Sepia'));
+    apply(TV80, k('EightiesTV'));
     apply(INVERT, k('Invert'));
     apply(NIGHT, k('NightVision'));
     // 선명하게(Sharpen)는 아래 셰이더에서 윤곽만 세운다 (대비로 바꾸면 큰 값에서 화면이 새까매진다)
-    const con = any('Contrast', 'EdgeBlackLine', 'Drawing');
+    const con = any('Contrast', 'EdgeBlackLine');
     if (con > 0) m = mul(m, contrast(1 + 0.8 * Math.min(2, con)));
     // 대비 배율 (원작 Color_Contrast): 1 = 그대로, 0 = 회색
     const ca = fs.get('ContrastAdj');
@@ -605,6 +638,7 @@ export class ScreenFx {
       u.uAura[1] = k('AuraSpeed');
       u.uAura[2] = k('AuraTint');
       u.uPlasma = Math.min(1, k('Plasma'));
+      u.uDraw = Math.min(1, k('Drawing'));
       // 0에 가까운 반복 횟수는 화면이 한 점으로 모이므로 막는다
       const tl = (v: number) => (Math.abs(v) < 0.05 ? (v < 0 ? -0.05 : 0.05) : v);
       u.uTile[0] = tl(screen.tile[0]);
@@ -617,7 +651,7 @@ export class ScreenFx {
       u.uBloomCol[0] = ((bloom.color >> 16) & 255) / 255;
       u.uBloomCol[1] = ((bloom.color >> 8) & 255) / 255;
       u.uBloomCol[2] = (bloom.color & 255) / 255;
-      if (u.uPixel > 0 || u.uAberr > 0 || u.uScan > 0 || u.uFish > 0 || u.uPoster > 0 || u.uVig > 0 || u.uBloom > 0 || u.uWave > 0 || u.uGlitch > 0 || u.uHole[3] > 0 || u.uShock[3] > 0 || u.uDark > 0 || u.uSharp > 0 || u.uManga > 0 || u.uAura[0] > 0 || u.uPlasma > 0 || tiled) out.push(this.distort);
+      if (u.uPixel > 0 || u.uAberr > 0 || u.uScan > 0 || u.uFish > 0 || u.uPoster > 0 || u.uVig > 0 || u.uBloom > 0 || u.uWave > 0 || u.uGlitch > 0 || u.uHole[3] > 0 || u.uShock[3] > 0 || u.uDark > 0 || u.uSharp > 0 || u.uManga > 0 || u.uAura[0] > 0 || u.uPlasma > 0 || u.uDraw > 0 || tiled) out.push(this.distort);
     }
     return out;
   }
@@ -627,8 +661,15 @@ export class ScreenFx {
    * 화면 높이에 비례한 넓은 흐림 (720px 기준 약 25~45px).
    */
   /** scale: 레벨의 빛 번짐 배율 (1 = 기본) */
-  worldFilters(bloom: BloomState, reduce: boolean, scale = 1): Filter[] {
+  worldFilters(bloom: BloomState, reduce: boolean, scale = 1, adofai = false): Filter[] {
     if (reduce || !this.glow || bloom.intensity <= 0 || scale <= 0) return [];
+    if (adofai) {
+      // 원작 Bloom (원작 에디터 시험 레벨로 잼): 밝기(Rec.601)가 문턱을 넘은 픽셀에
+      // 그 색 × 세기/200 × Bloom 색을 더한다 → 고른 면은 (1 + 세기/200 × 색)배 (세기 100 = 1.5배, 200 = 2배).
+      // 빛은 좁다 (1440p에서 흰 선 12px 밖이면 거의 0).
+      this.glow.set(bloom.threshold, (bloom.intensity / 2) * scale, bloom.color, 4 * (this.screenH / 1440), true);
+      return [this.glow];
+    }
     const b = Math.min(3, bloom.intensity);
     // 빛 색은 흰색과 원작 색의 중간 (원작 빛무리는 거의 흰색)
     const c = bloom.color;
@@ -646,8 +687,8 @@ export class ScreenFx {
   }
 
   /** 빛 번짐을 화면 전체(배경 포함)에 거는가: 레벨이 문턱을 0보다 크게 정했을 때. 문턱 0은 모든 것이 빛나 화면이 뿌옇게 떠서 트랙 층만. */
-  bloomWide(bloom: BloomState): boolean {
-    return bloom.threshold > 0.001;
+  bloomWide(bloom: BloomState, adofai = false): boolean {
+    return adofai || bloom.threshold > 0.001;
   }
 
   /** 날씨 입자 그리기 (화면 크기 w×h, dt 초). */

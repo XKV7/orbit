@@ -605,7 +605,12 @@ export class VisualTimeline {
             },
           });
         if (setsZoom)
-          this.active.push({ ev, chan: 'cam.zoom', apply: (p) => (this.camera.zoom = lerp(from.zoom, to.zoom, k0(p))) });
+          this.active.push({
+            ev,
+            chan: 'cam.zoom',
+            // 원작은 줌 값(보이는 영역 = 1/배율)을 보간한다 — 배율로 보간하면 0% → 270% 같은 줌에서 중간이 훨씬 확대돼 보인다 (Terrasphere 2:12)
+            apply: (p) => (this.camera.zoom = a.viewLerp ? 1 / lerp(1 / from.zoom, 1 / to.zoom, k0(p)) : lerp(from.zoom, to.zoom, k0(p))),
+          });
         if (setsRot)
           this.active.push({ ev, chan: 'cam.rot', apply: (p) => (this.camera.rotation = lerp(from.rotation, to.rotation, k0(p))) });
         return null;
@@ -619,6 +624,14 @@ export class VisualTimeline {
         // 같은 면의 이전 플래시는 멈춘다
         const chan = bg ? 'flash:bg' : 'flash:fg';
         this.active = this.active.filter((x) => x.chan !== chan);
+        if (a.legacy) {
+          // 원작 legacyFlash: 플래시가 하나뿐 — 새 플래시가 다른 면의 플래시(남아 있던 끝 상태 포함)를 지운다
+          // (원작 에디터 시험: 배경 플래시 100%를 유지하다 전경 플래시가 오면 그 뒤 배경이 원래대로)
+          const other = bg ? 'flash:fg' : 'flash:bg';
+          this.active = this.active.filter((x) => x.chan !== other);
+          if (bg) this.flashAlpha = 0;
+          else this.bgFlashAlpha = 0;
+        }
         return {
           ev: ev.duration > 0 ? ev : { ...ev, duration: 0.25 },
           chan,

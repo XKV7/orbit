@@ -77,6 +77,8 @@ export class Stage {
   private readonly flash = new Graphics();
   /** 배경 면 플래시 (배경 이미지 위, 트랙 아래) */
   private readonly bgFlash = new Graphics();
+  /** 배경색을 실제로 칠한 사각형 — 렌더러 지우기 색만 쓰면 화면 필터(Drawing·Sepia·Bloom 등)에게 배경이 투명이라 원작과 달리 필터가 안 걸렸다 */
+  private readonly bgFill = new Graphics();
   private bgSprite: Sprite | TilingSprite | null = null;
   private bgImageUrl: string | null = null;
   private bgFit: 'cover' | 'contain' | 'unscaled' | 'tile' = 'cover';
@@ -145,7 +147,7 @@ export class Stage {
     this.app.canvas.addEventListener('webglcontextrestored', () => (this.contextLost = false));
     this.bg.addChild(this.moteGfx, this.bgFlash);
     this.worldWrap.addChild(this.world);
-    this.backPlane.addChild(this.bg, this.backWorld);
+    this.backPlane.addChild(this.bgFill, this.bg, this.backWorld);
     this.app.stage.addChild(this.backPlane, this.worldWrap, this.overlay);
     this.overlay.addChild(this.screenLayer, this.flash);
     for (let i = 0; i < 70; i++) {
@@ -612,6 +614,8 @@ export class Stage {
       g.circle(m.x * w, m.y * h, m.r).fill({ color: 0xaab4ff, alpha: m.a });
     }
     this.layoutBg();
+    this.bgFill.clear();
+    this.bgFill.rect(0, 0, w, h).fill({ color: this.bgColor });
 
     this.flash.clear();
     if (flashAlpha > 0.001) this.flash.rect(0, 0, w, h).fill({ color: flashColor, alpha: flashAlpha });

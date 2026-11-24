@@ -107,6 +107,8 @@ export interface CameraAction extends ActionBase {
   offset?: [number | null, number | null];
   duration?: number;
   ease?: EaseName;
+  /** true = 줌을 보이는 영역(원작 줌 값 = 1/zoom)으로 보간 (원작 MoveCamera). 생략 = 배율로 보간. */
+  viewLerp?: boolean;
 }
 export interface FlashAction extends ActionBase {
   type: 'Flash';
@@ -118,6 +120,8 @@ export interface FlashAction extends ActionBase {
   /** fg = 화면 전체(기본), bg = 배경만 (트랙 뒤) */
   plane?: 'fg' | 'bg';
   duration?: number;
+  /** 원작 legacyFlash: 플래시가 하나뿐이라 새 플래시가 다른 면의 플래시까지 지운다 */
+  legacy?: boolean;
 }
 /** 타일 모양: orbit(기본, 둥근 띠) · standard(채움 + 어두운 테두리) · neon(어두운 속 + 밝은 테두리, 밟으면 환하게) · basic(단색). */
 export type TrackStyle = 'orbit' | 'standard' | 'neon' | 'basic' | 'neonlight';

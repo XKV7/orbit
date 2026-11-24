@@ -8,7 +8,7 @@
 ## 0. 처음 이어받을 때 (체크리스트)
 
 1. 사용자는 한국어로 말한다 → **답변은 한국어**. 커밋 메시지·PR 본문은 영어.
-2. 준비: `npm ci` → `npx vitest run` (230개 통과해야 정상) → `npm run build`.
+2. 준비: `npm ci` → `npx vitest run` (235개 통과해야 정상) → `npm run build`.
 3. `main`이 기준이다. 열린 PR이 있는지, 마지막 Firebase 배포가 성공했는지 본다 (2절).
 4. 8절의 **사용자 응답 대기** 항목 — 사용자가 캡처·파일을 보내면 그것부터 이어서 본다.
 5. 다른 계정이면:
@@ -38,7 +38,7 @@
   - 배포 확인: GitHub Actions의 'Deploy to Firebase' 실행(main, 최신 커밋)이 `success`인지 본다.
 - 커밋 메시지·PR 본문은 영어. 끝에 그 세션이 정한 attribution 줄을 붙인다. **모델 이름·ID는 커밋·PR·코드에 넣지 않는다.**
 - **저작권**: 원작 곡·영상·레벨 파일·그림은 저장소에 커밋하지 않는다 (비교·시험은 임시 폴더에서만). 원작의 그림·아이콘·소리·폰트를 베끼지 않는다. 사용자 대신 맵을 내려받아 배포하지 않는다.
-- 원작 내부 동작은 공개 모드 소스·위키·녹화 비교로 알아내고 **규칙과 숫자만** 우리 코드로 다시 짠다 (원작 코드 복사 금지). 쓴 자료: Overlayer(qwru0905), NoStopMod(Luxusio/ADOFAI-NoStopMod), DoMachinesDreamOfDeparture(kineticnapier — 원작 DLL 상수를 옮긴 시뮬레이터), AdofaiTweaks. 사용자 PC(Steam+ADOFAI)를 Remote Control로 연결하면 디컴파일러로 `Assembly-CSharp.dll`을 볼 수 있다고 안내해 둠 — 약관 주의, 아직 연결된 적 없음.
+- 원작 내부 동작은 공개 모드 소스·위키·녹화 비교로 알아내고 **규칙과 숫자만** 우리 코드로 다시 짠다 (원작 코드 복사 금지). 쓴 자료: Overlayer(qwru0905), NoStopMod(Luxusio/ADOFAI-NoStopMod), DoMachinesDreamOfDeparture(kineticnapier — 원작 DLL 상수를 옮긴 시뮬레이터), AdofaiTweaks. **사용자 PC에서 원작을 직접 돌려 대조**한다 (2026-11, 6절 '원작 직접 대조'). 원작 DLL 들여다보기(문자열·디컴파일)는 하지 않는다 — 자동 권한 검사가 막았고 약관 문제도 있다. 시험 레벨을 만들어 원작 화면을 재는 방식으로 규칙을 알아낸다.
 - 미리보기 서버를 끌 때 `pkill -f "vite preview"`를 쓰지 말 것 (다른 것까지 죽었다). 포트로 PID를 찾아 끈다: `ss -ltnp | grep :4175`.
 - 아티팩트는 비공개로 둔다.
 - 한 번 확정해 '다시 바꾸지 말 것'이라고 적힌 규칙(5절: 미드스핀 위치, 이벤트 지연 BPM)은 새 증거(원작 녹화 대조) 없이 바꾸지 않는다 — 두 번씩 뒤집었다가 되돌린 이력이 있다.
@@ -52,7 +52,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 230개 통과)
+npx vitest run         # 테스트 (현재 235개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -131,6 +131,15 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 - KeyLimiter → `KeyLimit` (게임 규칙): 그 타일부터 처음 누른 limit개 키만 인정(터치·마우스는 한 키). exceedBehaviour Ignore = 무시, Kill 계열 = 실패('맵 키 제한'), 이벤트 = targetTag 조건 연출 실행(runEventBehaviour Once면 한 번). enabled false·limit 0 = 끄기. QuomodocunquizE는 16개·무시.
 - 확장 필터 추가 (QuomodocunquizE): TV_WideScreenHV(위아래+좌우), Film_Grain(Value/10000), TV_LED·TV_ARCADE(_2)·TV_80·Blizzard(Fade), Noise_TV/_2/_3(Fade — Fade 1은 거의 안 보임), Blur_BlurHole(AlphaBlur %), Distortion_ShockWave(새 셰이더 `Shock`: 위치에서 둥근 굴절 고리가 계속 퍼짐), FX_Plasma, Vision_Drost(세기 0 = 없음). 레거시 SetFilter LightWater → Waves, OilPaint → Posterize.
 
+### 원작 에디터에서 시험 레벨로 잰 규칙 (2026-11, `tests/original-compare.test.ts`)
+회색 띠·색 띠 그림을 배경으로 깐 시험 레벨(이벤트만 바꿈)을 원작 에디터 자동 플레이로 돌려 화면 픽셀을 재고, 같은 레벨을 ORBIT에 넣어 숫자를 맞췄다.
+- **Bloom** (원작 레벨만, `meta.origin === 'adofai'` → `ScreenFx.worldFilters(…, adofai)`): 밝기(Rec.601 luma)가 문턱(threshold/100)을 넘은 픽셀의 **색 전체**에 세기/200 × Bloom 색을 곱해 더한다 → 고른 면은 (1 + 세기/200 × 색)배. 세기 50/100/200/300 = 1.25/1.5/2/2.5배, 자홍(ff00ff)이면 R·B만. 문턱은 딱 끊김(30%: 회색 64 그대로·89 → 178). **배경 그림·배경색·장식 모두** 걸린다 (화면 전체). 빛 번짐 반경은 좁다(1440p 흰 선 12px 밖이면 거의 0). 예전 규칙(빛 색을 흰색 쪽으로 섞고 문턱 0.45 이상·넓은 빛무리)은 Terrasphere 30초·54~72초를 하얗게 날렸다. ORBIT 자체 레벨은 예전 방식(트랙 층 빛무리) 그대로.
+- **legacyFlash** (설정 칸이 없으면 예전 레벨 = true): 플래시가 하나뿐 — 새 플래시가 **다른 면**의 플래시(남아 있던 끝 상태 포함)까지 지운다 (`Flash.legacy`). 시험: 배경 플래시 0→100% 유지 중 전경 플래시 100→0이 오면 끝난 뒤 원래 화면. CustomBackground는 플래시를 안 지운다. 예전엔 Terrasphere 1:54 이후 배경 플래시 100%가 끝까지 남아 화면이 하얬다. legacyFlash false면 면마다 따로(확인 안 함).
+- **MoveCamera 줌은 원작 줌 값(보이는 영역 = 1/배율)으로 보간** (`Camera.viewLerp`). 줌 0%→270%(16박)를 배율(20배→0.37배)로 보간하면 중간이 10배 확대돼 Terrasphere 2:12가 타일 몇 개로 꽉 찼다.
+- **CustomBackground·설정의 imageColor 알파 = 배경 그림 불투명도** (배경색 위로 비침). Terrasphere 1:29 'ffffff70'.
+- **배경색은 실제 사각형으로 칠한다** (`Stage.bgFill`): 렌더러 지우기 색만 쓰면 화면 필터에게 투명이라 Drawing·Sepia·Bloom이 배경색 부분에 안 걸렸다 (Terrasphere 1:18 검은 배경 → 원작은 갈색 종이).
+- 필터 색 (원작 시험 수치): **Grayscale** = Rec.601 (파랑 64·128·255 → 123). **Sepia** = 밝기 + (112, 43, 20)/255 (검정도 짙은 갈색, 회색 51 → 166·92·65). **Drawing** = 원래 색과 '스케치'(종이 회색 225 × (0.55 + 0.55 × 가장 밝은 채널))를 세기만큼 섞음 (세기 35: 51→86, 255→245) — 원작의 구겨진 종이 무늬·연필 윤곽은 아직 없음. **EightiesTV** 색 = 따뜻하고 강한 대비 (세기 100: 회색 102 → 169·132·123, 153 → 243·216·207).
+
 ### 장식·화면 (`src/render/`)
 - 입자에 그림을 정했는데 그 그림이 없으면(.adofai만 불러옴·불러오는 중) 입자를 내지 않는다 — 흰 사각형으로 대신 그리면 화면이 하얗게 덮였다 (QuomodocunquizE).
 - 가림막(mask)은 **알파 채널**로 (빨강 채널이면 검게 칠한 가림막이 없어진 것처럼 돼 화면이 까매졌다 — BIKE).
@@ -139,7 +148,7 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 - 카메라에 붙은 장식은 카메라 줌에 따라 위치·크기가 함께 바뀌어 화면에 고정, `lockScale`이면 반대로 월드 크기 유지. 월드 장식은 `lockScale`일 때만 화면 크기 유지.
 - 입자 크기는 그림 픽셀 수와 무관한 길이 (1 = 타일 하나, 긴 변 기준).
 - HallOfMirrors(잔상)는 배경 그림·영상이 있으면 쌓지 않는다 (원작은 배경이 매 프레임 다시 덮음).
-- Bloom: 문턱이 0보다 크면 화면 전체(배경 포함)에 걸고, 문턱 0이면 트랙 층에만(+레벨별 `settings.glow` 배율).
+- Bloom (ORBIT 자체 레벨): 문턱이 0보다 크면 화면 전체(배경 포함)에 걸고, 문턱 0이면 트랙 층에만(+레벨별 `settings.glow` 배율). 원작 레벨은 위 '시험 레벨로 잰 규칙'.
 - 레거시 SetFilter Sharpen은 대비가 아니라 윤곽 선명화 (큰 값에서 화면이 까매졌다).
 - **장식·배경 그림은 시작 전에 전부 미리 올린다** (#96, 원작처럼 — `DecorationView.preload`, `Stage.loadBackground`). 불러오는 동안 '그림 불러오는 중… n / N' 표시. 크기는 파일 머리말에서 먼저 읽고(`src/render/imagesize.ts`), 전부 원본(최대 MAX_TEX)이 예산의 85% 안이면 원본 그대로, 넘치면 **긴 변 상한**(cap)을 정해 큰 그림만 줄여 예산 60% 안의 '기본판'으로 올린다. 기본판은 끝까지 내리지 않고, 시간이 지났다고 내리지도 않는다(미리 올린 레벨은 `sweep` 안 함). 화면에서 크게 보이면 `upgrade`가 원본에서 크게 다시 올리고, 예산이 차면 `evict`가 크게 올린 것만 **기본판으로 되돌린다**. 줄여 그린 캔버스는 GPU에 올린 뒤 비운다(메모리 두 배 방지). 배경 그림은 주소별로 캐시해 바뀔 때 바로 바뀌고(예전: 바뀔 때마다 새로 불러와 비었다가 뜨고, 예전 텍스처를 안 내려 그래픽 메모리가 쌓였다) 레벨이 끝나면 `clearBackgrounds`. 사용자 보고 '거의 모든 원작 맵이 처음부터 이상, 갈수록 더, 그림이 늦게 뜨거나 흐림'의 원인으로 본 것 — 예전엔 그림을 처음 보일 때 불러오고(늦게 뜸), 화면 크기만큼만 올리고(다가가면 흐림), 폰은 4초 안 보이면 내렸다(다시 늦게 뜸). 시험 레벨(3000px 그림 24장): 예전 빌드는 보여야 할 그림이 최대 14~16장 비었고, 새 빌드는 0장.
 - 장식 텍스처 (미리 올리지 않을 때·크게 다시 올릴 때): **화면에 보이는 크기만큼만** 올리고 커지면 원본에서 다시 올림. 메모리 예산 PC 768MB / 폰 256MB (기기 메모리 6GB 이상 태블릿·폰은 384MB·최대 4096px), 넘치면 안 보이는 것부터 내림. 그래픽 메모리가 넘치면 WebGL이 꺼져 타일까지 사라진다 (Phantigma: 그림 142장, 7억 화소). 꺼진 기기는 `localStorage orbit.lowgpu=<시각>`으로 **사흘만** 기억해 작게 올림 (`src/render/gpu.ts`; 예전 형식 '1'은 무시 — 영영 흐리게 보였다).
@@ -149,6 +158,12 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 - 뒤 버퍼(`useBackBuffer`, 매 프레임 화면을 한 번 더 옮겨 그림)는 섞기 모드(Overlay·SoftLight·Difference) 장식이 있는 레벨에서만 켠다 (`Stage.setBackBuffer`, 게임 시작 시). Phantigma·QuomodocunquizE는 켜짐, ofnr은 꺼짐.
 
 ## 6. 시험·비교 방법
+
+### 원작 직접 대조 (사용자 PC, 2026-11~)
+- 사용자 PC(Windows, RTX 5070, 2560×1440)에 원작이 있다: `C:\Program Files (x86)\Steam\steamapps\common\A Dance of Fire and Ice` (UnityModManager + AdofaiTweaks 키 뷰어). 구독한 워크숍 레벨: `C:\Program Files (x86)\Steam\steamapps\workshop\content\977950\<번호>\main.adofai` (Terrasphere 2515943059, Phantigma 3677858306, Timeline 3393273493, Cardboard 2530174178, LORELEI 3023696933 등 18개). 내려받은 zip도 `~/Downloads`에 많다.
+- 원작 조작은 컴퓨터 제어(computer-use)로. 실행: `Start-Process` 로 exe. **메인 메뉴는 박자에 맞춰 눌러야 움직여서 Claude가 레벨 에디터까지 못 간다** → 사용자에게 '레벨 에디터까지만 들어가 달라'고 부탁했다. 에디터에서는: 위 가운데 파일 메뉴(▼) → '열기…' → 파일 이름 칸에 전체 경로 입력 → Enter. 오른쪽 아래 로봇 아이콘 = 자동 플레이(흰색 = 켜짐 — 꼭 켜고 재생할 것), 왼쪽 아래 ▶ = 재생, Esc = 에디터로. 게임 창이 포커스를 잃으면 키 입력이 막히므로 PowerShell `SetForegroundWindow`로 창만 앞으로(입력은 computer-use로만).
+- 녹화: 파이썬 `mss`+`Pillow`로 화면을 12fps JPG로 저장(파일 이름 = 녹화 시각). ORBIT은 Playwright(`channel: 'chrome'`, 실제 GPU)로 자동 플레이하며 `__orbitSongTime`을 이름에 넣어 계속 캡처. 두 녹화는 시작 흰 번쩍임 같은 뚜렷한 장면의 밝기 변화로 시각을 맞춘다 (Terrasphere: 원작 녹화 시각 = 곡 시각 − 1.39초). 도구 스크립트는 저장소 밖(세션 scratchpad)에 두었다 — 필요하면 다시 만든다(각 50줄 이하).
+- **규칙 알아내기 = 시험 레벨**: 회색 띠(51·102·153·204·255)·색 띠 그림을 배경으로, 10타일마다 이벤트 하나씩 바꾼 120BPM 직선 레벨을 만들어 원작·ORBIT 둘 다 돌리고 띠 가운데 픽셀을 비교. Bloom·legacyFlash·필터 색을 이렇게 맞췄다 (5절). 원작 녹화에 Claude 창·키 뷰어가 겹치는 자리(오른쪽 위, 가운데 아래)는 재지 말 것.
 
 - 브라우저 자동 시험: Playwright. 클라우드 컨테이너에는 전역 설치(`/opt/node22/lib/node_modules/playwright`)가 있고 `scripts/lib.mjs`가 찾아 쓴다. Chromium은 `--use-gl=swiftshader --enable-unsafe-swiftshader` (소프트웨어 GPU — **그리기 속도는 실제 기기와 다르다**).
 - 게임이 열어 둔 시험용 전역:
@@ -166,7 +181,8 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 
 ## 7. 제작 과정 (PR 요약, 최근 → 과거)
 
-**원작 레벨 재현 · 원작 규칙 (#71~#104)**
+**원작 레벨 재현 · 원작 규칙 (#71~)**
+- (이번) **원작 직접 대조 시작** — 사용자 PC의 원작으로 Plum - Terrasphere(처음 시험하는 맵) 전 구간을 ORBIT과 나란히 녹화해 비교하고, 원인마다 시험 레벨로 원작 규칙을 재서 고침: 원작식 Bloom(화면 전체·색 그대로·세기/200), legacyFlash(새 플래시가 다른 면 플래시를 지움), MoveCamera 줌을 보이는 영역으로 보간, 배경 imageColor 알파, 배경색을 실제로 칠해 필터가 걸리게, Grayscale·Sepia·Drawing·EightiesTV 색. 결과: 30초·54~72초·114초 이후 하얗게 날아가던 화면, 132초 과한 확대, 78초 검은 배경이 원작처럼.
 - #104 레벨 선택 '에디터로 열기': 고른 레벨(데모·불러온 것·온라인·영구 목록 — 영구 목록은 먼저 받음)을 복사본(새 id)으로 에디터에 (`openInEditor`, 저장소 되살리기는 건너뜀, 고치던 레벨이 있으면 `editorHasWork`로 묻는다). 원본은 그대로.
 - #103 **음원 → 자동 맵 업그레이드** (`autochart.ts` `planStyled`·`styledActions`, 사용자: '원작 맵처럼 회전·홀드·동타·속도변경을 써서 가시성 있고 이쁘게'). 원작 맵 4개 통계(트윌 100타일당 17~32, 곧은 길 18~32%, 미드스핀 2~3, 홀드 거의 없음)를 보고: ① 반박보다 촘촘하면 구간별 속도 변경으로 길을 편다(`chooseMults`+`planPath`, 예전엔 일반 난이도에서 45° 소용돌이) ② 구간 첫 타격·긴 소용돌이 가운데를 `planPath`의 `twirlBias`(트윌하고 싶은 자리)로 — 나중에 트윌을 끼우면 뒤 길이 통째로 바뀌어 겹쳤다 ③ 동타 = 미드스핀(간격 0, `zero`), 어려움 이상·센 강박(상위 10%)·뒤가 꺾이는 자리만(곧게 가면 지나온 길로 되돌아가 겹침) ④ 홀드 = 1.5~2박 빈 곳에 소리가 이어지면(`rmsEnvelope`, 55%) 채우지 않고 홀드(1.5박 넘으면 1박은 제자리 공전 Pause — U턴 겹침 방지). 앞보기 12·24·40 × 방향 중 겹침 최소·속도 변경 최소, 꾸미지 않은 길보다 겹치거나 속도 변경이 10% 넘게 늘면 안 꾸민 쪽. 실제 곡(Cardboard 70초·칩튠) 대조: 겹침 0, 매우 어려움 45° 타일 57→2.
 - #102 에디터 '채보로 노래 만들기' (`src/audio/chartsong.ts`): 장르 칩튠·스피드코어·리듬코어·아트코어. 타일 치는 순간마다 멜로디 한 음(0.13초보다 빠른 연타 = 화음 아르페지오, 홀드 = 다음 타일까지 길게), 드럼·베이스·화음은 박 그리드(`beatGrid`)에 — 박은 4타일·2초 넘게 이어진 BPM만 따라가고(마법진처럼 타일마다 바뀌는 BPM은 무시), 타일이 박에서 밀리고 뒤 4타일이 새 자리 기준 반 박 단위면 거기서 박을 다시 맞춤, 80~260 BPM으로 접음. 첫 타일 전은 하이햇 카운트인. 합성 소리라 아트코어는 분위기만. 파일 이름 `orbit-<장르>-<seed>.wav`, 앞 것 하나만 남김.
@@ -225,6 +241,7 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 - 판정은 입력 이벤트 시각(`event.timeStamp`) 기준이라 프레임이 떨어져도 판정은 밀리지 않는다 — 성능 작업은 화면 부드러움 문제.
 
 ### 알려진 문제
+- **Terrasphere에서 남은 차이** (원작 직접 대조, 2026-11): ① 시작 부분(8~12초) 트랙이 원작은 하얗게 크게 빛나고 화면도 더 확대돼 있다 — 트랙 스타일 Neon/Standard + 반투명 트랙 색(…70·…99) + Bloom 조합, 또는 원작의 행성 주변 빛무리. ② Drawing의 종이 무늬·연필 윤곽 없음. ③ 원작 Bloom은 가는 흰 선(3px)이 문턱 70%에서 안 빛남 → 원작은 줄인 화면에서 문턱을 재는 듯 (우리는 원래 해상도). ④ 없는 배경 그림(galaxy-2643089_1920.jpg 등)일 때 원작은 앞 배경이 남는 듯(1:42) — 확인 필요. ⑤ 1:29~1:35 원작은 MotionBlur·Blizzard로 화면이 뿌옇다.
 - **타일 이동(MoveTrack) 중 공이 타일을 따라가는 시각적 오류** — 사용자가 보고. 공을 착지 위치에 고정하는 수정을 넣었다가 되돌림 (트랙 전체가 미끄러지는 연출은 원작도 공이 따라갈 수 있어 확신 없음). 어느 레벨·몇 초인지와 원작 녹화를 받아 비교한 뒤 고칠 것.
 - 배경(BGA): Phantigma 29초 근처 회색 장면, 152초 카메라 줌/위치, 145초 만화 집중선 과함, 전체 채도가 원작보다 낮음. Plum - Timeline은 구름 위치(카메라 구도), 타일 반투명도.
 - ofnr: 행성 색(원작 녹화는 흰색, 플레이어 설정일 수 있음). 3:18 무지개 고리는 플레이어 설정 효과로 보여 구현 안 함.
@@ -242,6 +259,8 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 - 측정: `scripts/memory.mjs` (ofnr: 렌더러 최고 약 540MB, Pixel 7 흉내).
 
 ## 9. 클라우드 환경에서 겪은 것 (도구 메모)
+
+- (2026-11 말~) **사용자 PC(Windows)의 Claude 데스크톱 앱**에서도 작업한다. `gh`가 없고 GPU가 있다(실제 그리기 속도를 잴 수 있음). 원작 대조 방법은 6절.
 
 - GitHub: `gh` CLI 없음 → GitHub MCP 도구(`mcp__github__*`) 사용. owner `XKV7`, repo `tester`. PR 만들기·스쿼시 머지·Actions 실행 목록 모두 이걸로 했다.
 - (2026-11 말) GitHub MCP 도구가 없어지고 `gh api`(REST)로 바뀜. 저장소 이름이 `XKV7/orbit`으로 바뀐 뒤 `gh api repos/XKV7/tester/...`는 '숫자 ID 경로 미지원', `repos/XKV7/orbit`은 '이 저장소 GitHub 접근 미허용'으로 거절됐다 — `git push`(브랜치)는 됨. 사용자가 claude.ai에서 GitHub 연결·Claude 앱 설치로 `XKV7/orbit` 접근을 허용해야 PR·머지가 된다. 허용 없이 다른 길로 돌아가지 말 것. → 사용자가 모든 저장소 접근을 허용한 뒤 `add_repo`(owner `XKV7`, repo `orbit`, access `push`)로 세션에 붙이니 `gh api repos/XKV7/orbit/...`(PR 만들기·머지·Actions 조회)가 됐다. 새 세션이면 먼저 `gh api repos/XKV7/orbit`로 확인하고 막히면 `add_repo`.
