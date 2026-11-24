@@ -1236,7 +1236,7 @@ export class EditorScreen implements Screen {
           this.recBadge,
           h('button', { class: 'btn small', onclick: () => this.undo(), title: 'Ctrl+Z' }, '↶'),
           h('button', { class: 'btn small', onclick: () => this.redo(), title: 'Ctrl+Y' }, '↷'),
-          h('button', { class: 'btn small primary', onclick: () => this.playtest(), title: 'Space' }, '▶ 플레이테스트'),
+          this.playtestBox(),
         ),
         (this.canvasEl = h(
           'div',
@@ -1466,8 +1466,6 @@ export class EditorScreen implements Screen {
       placeholder: '현재 BPM 유지',
       onchange: () => (this.fillBpm = Math.max(0, Number(bpm.value) || 0)),
     });
-    const auto = h('input', { type: 'checkbox', checked: this.autoplay, onchange: () => (this.autoplay = auto.checked) });
-    const noFail = h('input', { type: 'checkbox', checked: this.noFail, onchange: () => (this.noFail = noFail.checked) });
     return h(
       'div',
       { class: 'col' },
@@ -1515,10 +1513,6 @@ export class EditorScreen implements Screen {
           '1박 직진 타일 채우기',
         ),
         ...this.fitRhythmRows(),
-        h('label', null, '자동 플레이'),
-        h('label', { class: 'row' }, auto, h('span', { class: 'dim' }, '플레이테스트에 적용')),
-        h('label', null, '무적 모드'),
-        h('label', { class: 'row', title: '실패하지 않고 끝까지 — 끝나면 판정별 횟수와 절대정확도가 나와요' }, noFail, h('span', { class: 'dim' }, '플레이테스트에 적용')),
       ),
     );
   }
@@ -1527,6 +1521,23 @@ export class EditorScreen implements Screen {
    * 박자 맞추기 (마법진): 모양을 만들려고 각도를 바꿔도 들리는 박자가 그대로이게 타일마다 BPM을 정한다.
    * 범위는 '선택 타일로' 버튼으로 시작·끝을 찍는다 (비우면 선택 타일부터 끝까지).
    */
+  /** 플레이테스트 버튼 + 바로 아래 자동 플레이·무적 모드 (오른쪽 도구 칸 맨 아래에 있으면 장식 많은 맵에서 내려가기 힘들었다) */
+  private playtestBox(): HTMLElement {
+    const auto = h('input', { type: 'checkbox', checked: this.autoplay, onchange: () => (this.autoplay = auto.checked) });
+    const noFail = h('input', { type: 'checkbox', checked: this.noFail, onchange: () => (this.noFail = noFail.checked) });
+    return h(
+      'div',
+      { class: 'playtest-box' },
+      h('button', { class: 'btn small primary', onclick: () => this.playtest(), title: 'Space' }, '▶ 플레이테스트'),
+      h(
+        'div',
+        { class: 'row' },
+        h('label', { class: 'row', title: '게임이 대신 쳐요' }, auto, '자동 플레이'),
+        h('label', { class: 'row', title: '실패하지 않고 끝까지 — 끝나면 판정별 횟수와 절대정확도가 나와요' }, noFail, '무적 모드'),
+      ),
+    );
+  }
+
   private fitRhythmRows(): HTMLElement[] {
     const intOrNull = (v: string) => (v.trim() === '' || !Number.isFinite(Number(v)) ? null : Math.max(0, Math.round(Number(v))));
     const from = h('input', { type: 'number', min: 0, value: this.fitFrom ?? '', placeholder: '선택', style: 'width:6.5em', onchange: () => (this.fitFrom = intOrNull(from.value)) });
