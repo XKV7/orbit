@@ -8,7 +8,7 @@
 ## 0. 처음 이어받을 때 (체크리스트)
 
 1. 사용자는 한국어로 말한다 → **답변은 한국어**. 커밋 메시지·PR 본문은 영어.
-2. 준비: `npm ci` → `npx vitest run` (235개 통과해야 정상) → `npm run build`.
+2. 준비: `npm ci` → `npx vitest run` (238개 통과해야 정상) → `npm run build`.
 3. `main`이 기준이다. 열린 PR이 있는지, 마지막 Firebase 배포가 성공했는지 본다 (2절).
 4. 8절의 **사용자 응답 대기** 항목 — 사용자가 캡처·파일을 보내면 그것부터 이어서 본다.
 5. 다른 계정이면:
@@ -52,7 +52,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 235개 통과)
+npx vitest run         # 테스트 (현재 238개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -136,6 +136,8 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 - **Bloom** (원작 레벨만, `meta.origin === 'adofai'` → `ScreenFx.worldFilters(…, adofai)`): 밝기(Rec.601 luma)가 문턱(threshold/100)을 넘은 픽셀의 **색 전체**에 세기/200 × Bloom 색을 곱해 더한다 → 고른 면은 (1 + 세기/200 × 색)배. 세기 50/100/200/300 = 1.25/1.5/2/2.5배, 자홍(ff00ff)이면 R·B만. 문턱은 딱 끊김(30%: 회색 64 그대로·89 → 178). **배경 그림·배경색·장식 모두** 걸린다 (화면 전체). 빛 번짐 반경은 좁다(1440p 흰 선 12px 밖이면 거의 0). 예전 규칙(빛 색을 흰색 쪽으로 섞고 문턱 0.45 이상·넓은 빛무리)은 Terrasphere 30초·54~72초를 하얗게 날렸다. ORBIT 자체 레벨은 예전 방식(트랙 층 빛무리) 그대로.
 - **legacyFlash** (설정 칸이 없으면 예전 레벨 = true): 플래시가 하나뿐 — 새 플래시가 **다른 면**의 플래시(남아 있던 끝 상태 포함)까지 지운다 (`Flash.legacy`). 시험: 배경 플래시 0→100% 유지 중 전경 플래시 100→0이 오면 끝난 뒤 원래 화면. CustomBackground는 플래시를 안 지운다. 예전엔 Terrasphere 1:54 이후 배경 플래시 100%가 끝까지 남아 화면이 하얬다. legacyFlash false면 면마다 따로(확인 안 함).
 - **MoveCamera 줌은 원작 줌 값(보이는 영역 = 1/배율)으로 보간** (`Camera.viewLerp`). 줌 0%→270%(16박)를 배율(20배→0.37배)로 보간하면 중간이 10배 확대돼 Terrasphere 2:12가 타일 몇 개로 꽉 찼다.
+- **MoveDecorations = DOTween 방식**: 새 이벤트가 같은 장식·같은 속성(위치 x/y·회전·크기 x/y·시차·회전 중심·색·불투명도)의 **진행 중인** 움직임을 멈춘다 (`VisualTimeline.decoMoves`). QuomodocunquizE 1:03: 2222%로 키우는 중 '크기 0'이 와도 키우기가 계속돼 거대한 원이 화면을 덮었다(처음부터 재생할 때만 — 중간부터 시작하면 정상이라 찾기 어려웠다). 아직 시작 안 한(angleOffset 지연) 움직임도 원작은 멈출 수 있음 — 확인 안 함.
+- **가림막 깊이 범위** (useMaskingDepth, maskingFront/BackDepth → `Decoration.maskRange`): 가림막은 그 깊이 범위 안의 가려질 장식만 가린다. 범위별로 가림막 그림을 따로 그린다 (`DecorationView.maskGroups`). 맞는 가림막이 없으면 '안에서만 보임'은 안 보이고 '밖에서만 보임'은 그대로. 예전엔 가림막을 하나로 합쳐 QuomodocunquizE 배경 가림막 안에 제목·VII 로고·검은 사각형이 계속 보였다.
 - **CustomBackground·설정의 imageColor 알파 = 배경 그림 불투명도** (배경색 위로 비침). Terrasphere 1:29 'ffffff70'.
 - **배경색은 실제 사각형으로 칠한다** (`Stage.bgFill`): 렌더러 지우기 색만 쓰면 화면 필터에게 투명이라 Drawing·Sepia·Bloom이 배경색 부분에 안 걸렸다 (Terrasphere 1:18 검은 배경 → 원작은 갈색 종이).
 - 필터 색 (원작 시험 수치): **Grayscale** = Rec.601 (파랑 64·128·255 → 123). **Sepia** = 밝기 + (112, 43, 20)/255 (검정도 짙은 갈색, 회색 51 → 166·92·65). **Drawing** = 원래 색과 '스케치'(종이 회색 225 × (0.55 + 0.55 × 가장 밝은 채널))를 세기만큼 섞음 (세기 35: 51→86, 255→245) — 원작의 구겨진 종이 무늬·연필 윤곽은 아직 없음. **EightiesTV** 색 = 따뜻하고 강한 대비 (세기 100: 회색 102 → 169·132·123, 153 → 243·216·207).
@@ -162,7 +164,7 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 ### 원작 직접 대조 (사용자 PC, 2026-11~)
 - 사용자 PC(Windows, RTX 5070, 2560×1440)에 원작이 있다: `C:\Program Files (x86)\Steam\steamapps\common\A Dance of Fire and Ice` (UnityModManager + AdofaiTweaks 키 뷰어). 구독한 워크숍 레벨: `C:\Program Files (x86)\Steam\steamapps\workshop\content\977950\<번호>\main.adofai` (Terrasphere 2515943059, Phantigma 3677858306, Timeline 3393273493, Cardboard 2530174178, LORELEI 3023696933 등 18개). 내려받은 zip도 `~/Downloads`에 많다.
 - 원작 조작은 컴퓨터 제어(computer-use)로. 실행: `Start-Process` 로 exe. **메인 메뉴는 박자에 맞춰 눌러야 움직여서 Claude가 레벨 에디터까지 못 간다** → 사용자에게 '레벨 에디터까지만 들어가 달라'고 부탁했다. 에디터에서는: 위 가운데 파일 메뉴(▼) → '열기…' → 파일 이름 칸에 전체 경로 입력 → Enter. 오른쪽 아래 로봇 아이콘 = 자동 플레이(흰색 = 켜짐 — 꼭 켜고 재생할 것), 왼쪽 아래 ▶ = 재생, Esc = 에디터로. 게임 창이 포커스를 잃으면 키 입력이 막히므로 PowerShell `SetForegroundWindow`로 창만 앞으로(입력은 computer-use로만).
-- 녹화: 파이썬 `mss`+`Pillow`로 화면을 12fps JPG로 저장(파일 이름 = 녹화 시각). ORBIT은 Playwright(`channel: 'chrome'`, 실제 GPU)로 자동 플레이하며 `__orbitSongTime`을 이름에 넣어 계속 캡처. 두 녹화는 시작 흰 번쩍임 같은 뚜렷한 장면의 밝기 변화로 시각을 맞춘다 (Terrasphere: 원작 녹화 시각 = 곡 시각 − 1.39초). 도구 스크립트는 저장소 밖(세션 scratchpad)에 두었다 — 필요하면 다시 만든다(각 50줄 이하).
+- 녹화: 파이썬 `mss`+`Pillow`로 화면을 12fps JPG로 저장(파일 이름 = 녹화 시각). ORBIT은 Playwright(`channel: 'chrome'`, 실제 GPU)로 자동 플레이하며 `__orbitSongTime`을 이름에 넣어 계속 캡처. 두 녹화는 시작 흰 번쩍임 같은 뚜렷한 장면의 밝기 변화로 시각을 맞춘다 (Terrasphere: 원작 녹화 시각 = 곡 시각 − 1.39초). 도구 스크립트: `scripts/compare/` (README).
 - **규칙 알아내기 = 시험 레벨**: 회색 띠(51·102·153·204·255)·색 띠 그림을 배경으로, 10타일마다 이벤트 하나씩 바꾼 120BPM 직선 레벨을 만들어 원작·ORBIT 둘 다 돌리고 띠 가운데 픽셀을 비교. Bloom·legacyFlash·필터 색을 이렇게 맞췄다 (5절). 원작 녹화에 Claude 창·키 뷰어가 겹치는 자리(오른쪽 위, 가운데 아래)는 재지 말 것.
 
 - 브라우저 자동 시험: Playwright. 클라우드 컨테이너에는 전역 설치(`/opt/node22/lib/node_modules/playwright`)가 있고 `scripts/lib.mjs`가 찾아 쓴다. Chromium은 `--use-gl=swiftshader --enable-unsafe-swiftshader` (소프트웨어 GPU — **그리기 속도는 실제 기기와 다르다**).
@@ -182,6 +184,7 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 ## 7. 제작 과정 (PR 요약, 최근 → 과거)
 
 **원작 레벨 재현 · 원작 규칙 (#71~)**
+- (이번 2) **QuomodocunquizE 원작 대조**: 가림막 깊이 범위, MoveDecorations 진행 중 움직임 멈추기. 시험 훅 `window.__orbitDecoList = true` → `__orbitStats.decoList`(보이는 장식 '태그|그림|불투명도|크기'). 시작 지점을 바꿔 가며(`START`) 같은 시각을 찍고 장식 목록을 diff하면 '처음부터 재생할 때만 생기는 문제'를 찾을 수 있다.
 - (이번) **원작 직접 대조 시작** — 사용자 PC의 원작으로 Plum - Terrasphere(처음 시험하는 맵) 전 구간을 ORBIT과 나란히 녹화해 비교하고, 원인마다 시험 레벨로 원작 규칙을 재서 고침: 원작식 Bloom(화면 전체·색 그대로·세기/200), legacyFlash(새 플래시가 다른 면 플래시를 지움), MoveCamera 줌을 보이는 영역으로 보간, 배경 imageColor 알파, 배경색을 실제로 칠해 필터가 걸리게, Grayscale·Sepia·Drawing·EightiesTV 색. 결과: 30초·54~72초·114초 이후 하얗게 날아가던 화면, 132초 과한 확대, 78초 검은 배경이 원작처럼.
 - #104 레벨 선택 '에디터로 열기': 고른 레벨(데모·불러온 것·온라인·영구 목록 — 영구 목록은 먼저 받음)을 복사본(새 id)으로 에디터에 (`openInEditor`, 저장소 되살리기는 건너뜀, 고치던 레벨이 있으면 `editorHasWork`로 묻는다). 원본은 그대로.
 - #103 **음원 → 자동 맵 업그레이드** (`autochart.ts` `planStyled`·`styledActions`, 사용자: '원작 맵처럼 회전·홀드·동타·속도변경을 써서 가시성 있고 이쁘게'). 원작 맵 4개 통계(트윌 100타일당 17~32, 곧은 길 18~32%, 미드스핀 2~3, 홀드 거의 없음)를 보고: ① 반박보다 촘촘하면 구간별 속도 변경으로 길을 편다(`chooseMults`+`planPath`, 예전엔 일반 난이도에서 45° 소용돌이) ② 구간 첫 타격·긴 소용돌이 가운데를 `planPath`의 `twirlBias`(트윌하고 싶은 자리)로 — 나중에 트윌을 끼우면 뒤 길이 통째로 바뀌어 겹쳤다 ③ 동타 = 미드스핀(간격 0, `zero`), 어려움 이상·센 강박(상위 10%)·뒤가 꺾이는 자리만(곧게 가면 지나온 길로 되돌아가 겹침) ④ 홀드 = 1.5~2박 빈 곳에 소리가 이어지면(`rmsEnvelope`, 55%) 채우지 않고 홀드(1.5박 넘으면 1박은 제자리 공전 Pause — U턴 겹침 방지). 앞보기 12·24·40 × 방향 중 겹침 최소·속도 변경 최소, 꾸미지 않은 길보다 겹치거나 속도 변경이 10% 넘게 늘면 안 꾸민 쪽. 실제 곡(Cardboard 70초·칩튠) 대조: 겹침 0, 매우 어려움 45° 타일 57→2.
@@ -239,6 +242,15 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 - Phantigma 113~115초 하얀 장면(타일이 흰 바탕에 묻힘)은 장식 그림(빛·원형 그라데이션) 때문 — 원작 녹화를 받아 같은지 볼 것.
 - WebGPU 렌더러 (`screenfx.ts`의 GLSL 셰이더 3개를 WGSL로도), 그리기를 Worker(OffscreenCanvas)로 — 큰 작업.
 - 판정은 입력 이벤트 시각(`event.timeStamp`) 기준이라 프레임이 떨어져도 판정은 밀리지 않는다 — 성능 작업은 화면 부드러움 문제.
+
+### 내일 할 일 — 원작 '시스템' 맞추기 (사용자: 특정 맵보다 게임 전체 구조를 원작과 일치시켜 달라, 2026-11-25)
+방법은 6절 '원작 직접 대조'. 도구는 `scripts/compare/` (README 참고, 시험 레벨은 `mklevel.py`: 120BPM 직선 길 + 10타일마다 이벤트 하나). 지난 녹화는 세션 scratchpad에 있었다 — 지워졌으면 다시 찍는다. **원작 녹화 오른쪽 위·가운데 위는 Claude 창이 가린다** → 시험 레벨은 카메라를 `relativeTo Player, position [3, 2.5]`로 옮겨 트랙이 화면 왼쪽 아래에 오게 할 것 (sys2를 그냥 찍었다가 앞 타일이 창 밑에 숨어 개수를 잘못 셌다). 예상: 핵심 시스템 4~6시간, 확장 필터 전부까지 하루~이틀.
+1. **트랙 등장·퇴장 애니메이션 (AnimateTrack)** — `sys2b`(직선, 종류 8가지: Fade/Fade, Extend/Shrink, Grow/Shrink_Spin, Grow_Spin/Retract, Assemble/Scatter, Assemble_Far/Scatter_Far, Rise/Fade, Drop/Fade, 앞 3박·뒤 2박)를 원작 에디터에 열어 둔 상태에서 멈춤 — 녹화부터. 원작에 없는 이름(Raise·Raise_Spin·Retract_Spin, 퇴장 Rise·Drop)은 '불러오기 실패'. 잴 것: 나타나기 시작·끝 시각(타일 치는 시각 기준), 애니메이션 길이, Assemble/Scatter 거리·회전(원작은 3~8칸 밖에서 날아오고 돈다 — 우리는 가깝다), 앞뒤로 보이는 타일 수(우리 쪽이 뒤 1개로 적어 보였다 — 창에 가려 확실치 않음). 코드: `VisualTimeline.tileAnimAt` (길이 min(0.35초, 1박), 흩어짐 400px 등 어림값).
+2. **트랙 색 방식** — `sys1`(구간 8타일: Neon, NeonLight, Basic, Minimal, Glow, Blink, Switch, Rainbow, 반투명 Standard·Neon) 원작·ORBIT 녹화는 있음(scratchpad `rec/s1`, `rec/os1`, 정렬 원작 = ORBIT + 약 2.5초). 본 것: Glow/Blink는 원작이 **트랙 전체가 시간에 따라** 두 색 사이를 오가는데 ORBIT은 구간별로 끊겨 보임 → 주기·모양(trackColorAnimDuration 2초, pulse) 재기. 지나간 타일은 원작이 하얗게 번지듯 빛남(플레이어 설정일 수도).
+3. **카메라 이벤트** — `sys3`(Player/Tile/Global/LastPosition 기준, 줌·회전·이징) 아직 녹화 안 함. 카메라가 플레이어를 따라가는 지연(부드러움)도 같이.
+4. **QuomodocunquizE 남은 차이** (녹화: `rec/quomo`, ORBIT `rec/oq3`, 원작 = ORBIT 곡 시각 + 1.0초): ① WideScreenHorizontal(filter_Size 55)이 ORBIT은 위아래 검은 띠가 크게 생기는데 원작은 거의 없음(1:45) → 크기 단위 재기 ② 1:14·1:22 원작은 화면 전체가 빨간데 ORBIT은 원 바깥이 검음 ③ 2:26 원작은 화면 전체 분홍 줄무늬, ORBIT은 작은 사각 그림 ④ 2:58 ORBIT은 트랙이 안 보임 ⑤ 1:06 ORBIT이 노랗게 과노출 ⑥ 0:42 원작이 더 어둡고 비네트.
+5. **확장 필터(CameraFilterPack) 하나씩** — 시험 레벨에 SetFilterAdvanced를 구간마다 넣어 띠 그림으로 재기 (Bloom·Sepia처럼).
+6. 끝나면 PR·머지 — **`gh`가 이 PC에 없다** (`winget install GitHub.cli` 후 `gh auth login`은 사용자가). 브랜치 `claude/original-compare`에 커밋 3개 푸시됨(b1dea6a, 4ad66d6, 그 뒤 이 문서). 머지 뒤 Firebase 배포 확인, 새 비공개 아티팩트.
 
 ### 알려진 문제
 - **Terrasphere에서 남은 차이** (원작 직접 대조, 2026-11): ① 시작 부분(8~12초) 트랙이 원작은 하얗게 크게 빛나고 화면도 더 확대돼 있다 — 트랙 스타일 Neon/Standard + 반투명 트랙 색(…70·…99) + Bloom 조합, 또는 원작의 행성 주변 빛무리. ② Drawing의 종이 무늬·연필 윤곽 없음. ③ 원작 Bloom은 가는 흰 선(3px)이 문턱 70%에서 안 빛남 → 원작은 줄인 화면에서 문턱을 재는 듯 (우리는 원래 해상도). ④ 없는 배경 그림(galaxy-2643089_1920.jpg 등)일 때 원작은 앞 배경이 남는 듯(1:42) — 확인 필요. ⑤ 1:29~1:35 원작은 MotionBlur·Blizzard로 화면이 뿌옇다.
