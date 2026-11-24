@@ -1,5 +1,5 @@
 import type { AutoDifficulty } from '../core/autochart';
-import { DIFF_CFG, levelFromHits } from '../core/autochart';
+import { DIFF_CFG, levelFromHits, STYLE_LEVEL } from '../core/autochart';
 import { audio } from '../audio/engine';
 import { beatTime, composeSong, encodeWav, MOODS, renderSong, songFill, songHits, type Mood } from '../audio/songgen';
 import { newPackageId, type LevelPackage } from '../levels/package';
@@ -33,6 +33,7 @@ export function generatePackage(c: GenChoice, seed = Math.floor(Math.random() * 
     minGapSec: DIFF_CFG[c.difficulty].minGapSec,
     previewStart: firstA ? beatTime(song, firstA.bar * 4) : 0,
     fill: songFill(song),
+    style: STYLE_LEVEL[c.difficulty],
   });
   if (!r) throw new Error('곡이 너무 짧아 레벨을 만들 수 없습니다. 길이를 늘려 주세요.');
   const pkg: LevelPackage = {

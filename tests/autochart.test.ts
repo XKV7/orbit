@@ -131,8 +131,12 @@ describe('세밀한 난이도 (16분음표·셋잇단)', () => {
     const { c, recall, precision } = check('expert', song, beats);
     expect(recall).toBeGreaterThan(0.9);
     expect(precision).toBeGreaterThan(0.9);
-    expect(c.tiles.some((t) => Math.abs(t.beats - 0.25) < 1e-6)).toBe(true);
-    expect(Math.min(...c.tiles.slice(0, -1).map((t) => t.duration))).toBeGreaterThanOrEqual(0.12 - 1e-6);
+    // 16분 간격(시간)이 있고, 그 구간은 속도를 올려 길을 편다 (보이는 박 0.5 = 직각) — 원작 맵처럼
+    expect(c.tiles.some((t) => Math.abs(t.duration - (0.25 * 60) / bpm) < 1e-6)).toBe(true);
+    expect(c.level.actions.some((a) => a.type === 'SetSpeed')).toBe(true);
+    expect(c.tiles.some((t) => Math.abs(t.beats - 0.25) < 1e-6)).toBe(false);
+    // 동타(미드스핀, 길이 0)를 빼면 최소 간격 지킴
+    expect(Math.min(...c.tiles.slice(0, -1).filter((t) => !t.midspin).map((t) => t.duration))).toBeGreaterThanOrEqual(0.12 - 1e-6);
     // 보통은 16분을 버린다
     const n = compileChart(autoChart(song, SR, { difficulty: 'normal', bpm, offset: first })!.level);
     expect(n.tiles.some((t) => Math.abs(t.beats - 0.25) < 1e-6)).toBe(false);
@@ -143,8 +147,8 @@ describe('세밀한 난이도 (16분음표·셋잇단)', () => {
     const { c, recall, precision } = check('master', song, beats);
     expect(recall).toBeGreaterThan(0.9);
     expect(precision).toBeGreaterThan(0.9);
-    expect(c.tiles.some((t) => Math.abs(t.beats - 1 / 3) < 1e-6)).toBe(true);
-    expect(Math.min(...c.tiles.slice(0, -1).map((t) => t.duration))).toBeGreaterThanOrEqual(0.1 - 1e-6);
+    expect(c.tiles.some((t) => Math.abs(t.duration - 60 / bpm / 3) < 1e-6)).toBe(true);
+    expect(Math.min(...c.tiles.slice(0, -1).filter((t) => !t.midspin).map((t) => t.duration))).toBeGreaterThanOrEqual(0.1 - 1e-6);
     let bad = 0;
     for (let i = 0; i < c.tiles.length; i++)
       for (let j = i + 3; j < c.tiles.length; j++)
@@ -158,6 +162,6 @@ describe('세밀한 난이도 (16분음표·셋잇단)', () => {
     for (let k = 0; k < 40; k++) for (const b of [0, 0.25, 0.5, 1, 1.5, 2, 2.75, 3]) beats.push(k * 4 + b);
     const song = kickSong(200, 1, beats, 1 + (40 * 4 * 60) / 200 + 2);
     const c = compileChart(autoChart(song, SR, { difficulty: 'expert', bpm: 200, offset: 1 })!.level);
-    expect(Math.min(...c.tiles.slice(0, -1).map((t) => t.duration))).toBeGreaterThanOrEqual(0.12 - 1e-6);
+    expect(Math.min(...c.tiles.slice(0, -1).filter((t) => !t.midspin).map((t) => t.duration))).toBeGreaterThanOrEqual(0.12 - 1e-6);
   });
 });
