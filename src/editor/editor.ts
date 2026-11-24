@@ -4,6 +4,7 @@ import { compileChart, type Chart } from '../core/chart';
 import { toHex } from '../core/color';
 import {
   addAction,
+  spinCamera,
   deleteTile,
   fillStraight,
   fitRhythm,
@@ -151,6 +152,10 @@ export class EditorScreen implements Screen {
   private fitTo: number | null = null;
   private fitBeats = 1;
   private fitBpm = 0;
+  /** 카메라 계속 회전: n·m번 타일, 각도 */
+  private spinFrom: number | null = null;
+  private spinTo: number | null = null;
+  private spinDeg = 360;
   /** 각도를 바꿔도 박자 유지 (속도 바꾸기 자동) — 마법진 만들기 */
   private keepRhythm = (() => {
     try {
@@ -1513,6 +1518,7 @@ export class EditorScreen implements Screen {
           '1박 직진 타일 채우기',
         ),
         ...this.fitRhythmRows(),
+        ...this.spinRows(),
       ),
     );
   }
@@ -1536,6 +1542,52 @@ export class EditorScreen implements Screen {
         h('label', { class: 'row', title: '실패하지 않고 끝까지 — 끝나면 판정별 횟수와 절대정확도가 나와요' }, noFail, '무적 모드'),
       ),
     );
+  }
+
+  /** 카메라 계속 회전 (원작처럼): n번 타일부터 m번 타일까지 p도를 일정한 속도로 */
+  private spinRows(): HTMLElement[] {
+    const intOrNull = (v: string) => (v.trim() === '' || !Number.isFinite(Number(v)) ? null : Math.max(0, Math.round(Number(v))));
+    const from = h('input', { type: 'number', min: 0, value: this.spinFrom ?? '', placeholder: '선택', style: 'width:6.5em', onchange: () => (this.spinFrom = intOrNull(from.value)) });
+    const to = h('input', { type: 'number', min: 0, value: this.spinTo ?? '', placeholder: '끝까지', style: 'width:6.5em', onchange: () => (this.spinTo = intOrNull(to.value)) });
+    const pick = (el: HTMLInputElement, set: (v: number) => void) =>
+      h('button', { class: 'btn small', title: '지금 선택한 타일 번호를 넣어요', onclick: () => (set(this.sel), (el.value = String(this.sel))) }, '선택 타일로');
+    const deg = h('input', {
+      type: 'number',
+      step: 15,
+      value: this.spinDeg,
+      style: 'width:6.5em',
+      title: '+ / − 로 방향이 바뀌어요. 360 = 한 바퀴, 720 = 두 바퀴',
+      onchange: () => (this.spinDeg = Number(deg.value) || 0),
+    });
+    const run = h(
+      'button',
+      {
+        class: 'btn small primary',
+        title: 'n번 타일에 카메라 이벤트(회전·길이·linear)를 넣어요 (Ctrl+Z로 되돌리기)',
+        onclick: () => {
+          const a = this.spinFrom ?? this.sel;
+          const b = this.spinTo ?? this.chart.finish;
+          const r = spinCamera(this.level, a, b, this.spinDeg);
+          if (!r) {
+            toast('돌릴 수 없어요 — n·m 타일 번호(n < m)와 각도를 확인해 주세요', 3500);
+            return;
+          }
+          this.commit(r.level);
+          toast(`타일 ${Math.min(a, b)}~${Math.max(a, b)}: 카메라 ${+r.from.toFixed(2)}° → ${+r.to.toFixed(2)}° (${+r.beats.toFixed(3)}박 동안 일정하게) — 되돌리기 Ctrl+Z`, 5000);
+        },
+      },
+      '카메라 회전 넣기',
+    );
+    return [
+      h('label', { title: '원작처럼 카메라가 계속 돌게 — n번 타일부터 m번 타일까지 p도를 일정한 속도로' }, '카메라 계속 회전'),
+      h('div', { class: 'row', style: 'flex-wrap:wrap;gap:4px' }, h('span', { class: 'dim' }, 'n번 타일부터'), from, pick(from as HTMLInputElement, (v) => (this.spinFrom = v))),
+      h('label', null, ''),
+      h('div', { class: 'row', style: 'flex-wrap:wrap;gap:4px' }, h('span', { class: 'dim' }, 'm번 타일까지'), to, pick(to as HTMLInputElement, (v) => (this.spinTo = v))),
+      h('label', null, ''),
+      h('div', { class: 'row', style: 'flex-wrap:wrap;gap:4px' }, h('span', { class: 'dim' }, 'p도만큼'), deg),
+      h('label', null, ''),
+      run,
+    ];
   }
 
   private fitRhythmRows(): HTMLElement[] {
