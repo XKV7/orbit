@@ -4,7 +4,7 @@ import { library } from '../levels/library';
 import { loadPackageAudio, PACKAGE_ACCEPT, packageFromFileList, packageFromSong, PackageError, songFromZip, SONG_OR_ZIP_ACCEPT, type LevelPackage } from '../levels/package';
 import { getBest, settings } from '../game/settings';
 import { ambient } from '../render/stage';
-import { alertBox, choiceBox, DIFFICULTY_CHOICES, fileButton, h, isTyping, SENSITIVITY_CHOICES, show, stars, toast, warnIfHuge, type Screen } from './dom';
+import { alertBox, choiceBox, confirmBox, DIFFICULTY_CHOICES, fileButton, h, isTyping, SENSITIVITY_CHOICES, show, stars, toast, warnIfHuge, type Screen } from './dom';
 import { PlayScreen } from './play';
 import { speedSelect } from './speed';
 import { openSongGenerator } from './songgen';
@@ -88,6 +88,7 @@ export class SelectScreen implements Screen {
           onlineAvailable()
             ? (this.permBtn = h('button', { class: 'btn small', title: '비밀번호가 필요해요 — 사이트에 들어오는 모든 사람의 레벨 목록에 계속 보여요', onclick: () => void this.togglePermanent() }, '영구 추가') as HTMLButtonElement)
             : null,
+          h('button', { class: 'btn small', title: '고른 레벨을 레벨 에디터로 열어 고쳐요 (복사본 — 목록의 원본은 그대로)', onclick: () => void this.openEditor() }, '에디터로 열기'),
           h('button', { class: 'btn primary', onclick: () => this.play() }, '플레이'),
         ),
       ),
@@ -106,6 +107,17 @@ export class SelectScreen implements Screen {
       }
       if (added && this.cards.isConnected) this.render();
     });
+  }
+
+  /** 고른 레벨을 에디터로 (복사본). 에디터에 고치던 레벨이 있으면 묻는다. */
+  private async openEditor(): Promise<void> {
+    const p = this.sel;
+    if (!p) return;
+    const full = p.remote ? await this.download(p) : p;
+    if (!full) return;
+    const { editorHasWork, openInEditor } = await import('../editor/editor');
+    if (editorHasWork() && !(await confirmBox('에디터로 열기', `에디터에서 고치던 레벨 대신 '${full.level.meta.title}'을(를) 엽니다. 고치던 레벨이 필요하면 먼저 에디터에서 저장(.orbit.json·zip)해 두세요.`, '열기'))) return;
+    openInEditor(full);
   }
 
   /** 고른 레벨을 영구 목록에 넣거나 뺀다 (비밀번호). */
