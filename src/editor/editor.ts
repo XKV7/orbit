@@ -52,7 +52,7 @@ import {
 import { loadEditorFiles, loadEditorLevel, saveEditorFiles, saveEditorLevel } from '../levels/store';
 import { stage } from '../render/stage';
 import { fmtBeats, TrackView } from '../render/track';
-import { alertBox, choiceBox, confirmBox, fileButton, h, isTyping, show, toast, warnIfHuge, type Screen } from '../ui/dom';
+import { alertBox, choiceBox, confirmBox, fileButton, fileReadError, h, isTyping, show, toast, warnIfHuge, type Screen } from '../ui/dom';
 import { PlayScreen } from '../ui/play';
 import { openSongGenerator } from '../ui/songgen';
 import { openMp3Converter } from '../ui/convert';
@@ -1101,7 +1101,7 @@ export class EditorScreen implements Screen {
       this.centerOn(0, 0.8);
       if (pkg.warnings.length) await alertBox('불러오기 경고', pkg.warnings);
     } catch (e) {
-      await alertBox('불러올 수 없습니다', e instanceof PackageError ? e.details : [(e as Error).message]);
+      await alertBox('불러올 수 없습니다', e instanceof PackageError ? e.details : fileReadError(e));
     }
   }
 
@@ -1168,10 +1168,16 @@ export class EditorScreen implements Screen {
         return;
       }
     } catch (e) {
-      await alertBox('파일을 열 수 없습니다', e instanceof PackageError ? e.details : [(e as Error).message]);
+      await alertBox('파일을 열 수 없습니다', e instanceof PackageError ? e.details : fileReadError(e, f.name));
       return;
     }
-    const data = new Uint8Array(await f.arrayBuffer());
+    let data: Uint8Array;
+    try {
+      data = new Uint8Array(await f.arrayBuffer());
+    } catch (e) {
+      await alertBox('파일을 열 수 없습니다', fileReadError(e, f.name));
+      return;
+    }
     try {
       const buf = await this.eng.decode(data.buffer.slice(0) as ArrayBuffer);
       this.pkg.files.set(f.name, data);
@@ -1228,9 +1234,15 @@ export class EditorScreen implements Screen {
     toast(`${label} 곡을 만들어 음원으로 넣었어요 (${Math.round(pcm.length / sr)}초) — 플레이테스트로 들어 보세요. 다시 누르면 다른 곡`, 5000);
   }
 
-  private async addImage(files: FileList): Promise<void> {
+  private async addImage(files: FileList | File[]): Promise<void> {
     const f = files[0];
-    this.pkg.files.set(f.name, new Uint8Array(await f.arrayBuffer()));
+    if (!f) return;
+    try {
+      this.pkg.files.set(f.name, new Uint8Array(await f.arrayBuffer()));
+    } catch (e) {
+      await alertBox('그림을 열 수 없습니다', fileReadError(e, f.name));
+      return;
+    }
     this.commit(addAction(this.level, { floor: this.sel, type: 'Background', image: f.name }));
   }
 

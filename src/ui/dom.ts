@@ -146,16 +146,52 @@ export function stars(n: number): string {
   return '★'.repeat(Math.ceil(k / 2)) + '☆'.repeat(5 - Math.ceil(k / 2)) + ` ${k}`;
 }
 
-export function fileInput(opts: { accept?: string; multiple?: boolean; directory?: boolean }, onPick: (files: FileList) => void): HTMLInputElement {
+/** 파일을 못 읽었을 때(NotReadableError 등) 사용자에게 보여 줄 말. */
+export function fileReadError(e: unknown, name?: string): string[] {
+  const err = e as { name?: string; message?: string } | null;
+  if (err && (err.name === 'NotReadableError' || err.name === 'NotFoundError' || err.name === 'SecurityError'))
+    return [
+      `${name ? name + ' — ' : ''}브라우저가 이 파일을 읽을 권한을 잃었어요.`,
+      '구글 드라이브·클라우드 앱에서 바로 고르거나, 아직 내려받는 중이거나, 고른 뒤 파일이 옮겨지면 생겨요.',
+      '파일을 기기(다운로드 폴더)에 저장한 뒤 거기서 다시 골라 주세요.',
+    ];
+  return [err?.message ?? String(e)];
+}
+
+/**
+ * 고른 파일을 바로 메모리로 읽어 둔다. 안드로이드 크롬은 고른 뒤 시간이 지나거나 화면을 오가면
+ * (드라이브·다른 앱이 준 파일) 읽을 권한을 잃어 나중 읽기가 NotReadableError로 실패한다.
+ * 폴더 고르기는 상대 경로(webkitRelativePath)가 필요해 그대로 둔다.
+ */
+async function snapshot(list: FileList, keep: boolean): Promise<File[] | null> {
+  const arr = [...list];
+  if (keep) return arr;
+  try {
+    return await Promise.all(arr.map(async (f) => new File([await f.arrayBuffer()], f.name, { type: f.type, lastModified: f.lastModified })));
+  } catch (e) {
+    await alertBox('파일을 읽을 수 없습니다', fileReadError(e, arr.length === 1 ? arr[0].name : undefined));
+    return null;
+  }
+}
+
+/** 선택 이벤트 → 읽어 둔 파일 목록으로 onPick. */
+function picked(inp: HTMLInputElement, directory: boolean | undefined, onPick: (files: File[]) => void): void {
+  const list = inp.files;
+  if (list && list.length)
+    void snapshot(list, !!directory).then((files) => {
+      if (files) onPick(files);
+    });
+  // 읽기를 시작한 뒤 비운다 (같은 파일 다시 고르기 허용). File 객체는 이미 잡아 두었다.
+  inp.value = '';
+}
+
+export function fileInput(opts: { accept?: string; multiple?: boolean; directory?: boolean }, onPick: (files: File[]) => void): HTMLInputElement {
   const inp = h('input', { type: 'file', accept: opts.accept, multiple: opts.multiple, style: 'display:none' });
   if (opts.directory) {
     inp.setAttribute('webkitdirectory', '');
     inp.setAttribute('directory', '');
   }
-  inp.addEventListener('change', () => {
-    if (inp.files && inp.files.length) onPick(inp.files);
-    inp.value = '';
-  });
+  inp.addEventListener('change', () => picked(inp, opts.directory, onPick));
   return inp;
 }
 
@@ -172,21 +208,20 @@ const PICKER_HINT =
 export function fileButton(
   label: Child,
   opts: { accept?: string; multiple?: boolean; directory?: boolean; cls?: string; title?: string },
-  onPick: (files: FileList) => void,
+  onPick: (files: File[]) => void,
 ): HTMLLabelElement & { input: HTMLInputElement } {
   const inp = h('input', { type: 'file', class: 'file-btn-input', accept: opts.accept, multiple: opts.multiple, title: opts.title ?? '' });
   if (opts.directory) {
     inp.setAttribute('webkitdirectory', '');
     inp.setAttribute('directory', '');
   }
-  let picked = false;
+  let chosen = false;
   inp.addEventListener('change', () => {
-    picked = true;
-    if (inp.files && inp.files.length) onPick(inp.files);
-    inp.value = '';
+    chosen = true;
+    picked(inp, opts.directory, onPick);
   });
   inp.addEventListener('click', () => {
-    picked = false;
+    chosen = false;
     let opened = false;
     const mark = () => (opened = true);
     window.addEventListener('blur', mark, { once: true });
@@ -194,7 +229,7 @@ export function fileButton(
     setTimeout(() => {
       window.removeEventListener('blur', mark);
       document.removeEventListener('visibilitychange', mark);
-      if (!opened && !picked && document.hasFocus()) toast(PICKER_HINT, 7000);
+      if (!opened && !chosen && document.hasFocus()) toast(PICKER_HINT, 7000);
     }, 1500);
   });
   const lab = h('label', { class: `btn file-btn ${opts.cls ?? ''}`, title: opts.title }, label, inp) as HTMLLabelElement & {
