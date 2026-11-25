@@ -4,7 +4,7 @@ import { library } from '../levels/library';
 import { loadPackageAudio, PACKAGE_ACCEPT, packageFromFileList, packageFromSong, PackageError, songFromZip, SONG_OR_ZIP_ACCEPT, type LevelPackage } from '../levels/package';
 import { getBest, settings } from '../game/settings';
 import { ambient } from '../render/stage';
-import { alertBox, choiceBox, confirmBox, DIFFICULTY_CHOICES, fileButton, h, isTyping, SENSITIVITY_CHOICES, show, stars, toast, warnIfHuge, type Screen } from './dom';
+import { alertBox, choiceBox, confirmBox, DIFFICULTY_CHOICES, fileButton, fileReadError, h, isTyping, SENSITIVITY_CHOICES, show, stars, toast, warnIfHuge, type Screen } from './dom';
 import { PlayScreen } from './play';
 import { speedSelect } from './speed';
 import { openSongGenerator } from './songgen';
@@ -235,7 +235,7 @@ export class SelectScreen implements Screen {
       if (pkg.warnings.length) await alertBox('불러오기 경고', pkg.warnings);
     } catch (e) {
       done('read', 'unzip', 'convert');
-      const lines = e instanceof PackageError ? e.details : [(e as Error).message];
+      const lines = e instanceof PackageError ? e.details : fileReadError(e);
       await alertBox('레벨을 불러올 수 없습니다', lines);
     }
   }
