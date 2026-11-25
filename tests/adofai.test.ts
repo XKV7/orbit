@@ -591,3 +591,11 @@ describe('극단적인 BPM (Hello (BPM) 류)', () => {
     expect(r.level.actions.some((a) => a.type === 'MoveDecorations')).toBe(false);
   });
 });
+
+describe('관대한 JSON: 문자열 안 제어 문자', () => {
+  it('세로 탭 같은 제어 문자도 읽는다 (CAT ROTATION 장식 글자에 \\v — 예전엔 맵이 안 열렸다)', () => {
+    const v = parseLenientJson('{"text": "a\u000bb\u0001c", "n": 1}') as { text: string; n: number };
+    expect(v.text).toBe('a\u000bb\u0001c');
+    expect(v.n).toBe(1);
+  });
+});

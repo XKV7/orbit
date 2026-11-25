@@ -30,7 +30,7 @@ const MIDSPIN = 999;
 
 /**
  * .adofai는 JSON과 비슷하지만 BOM, 끝에 붙은 쉼표(`, }`), 문자열 안 줄바꿈이 흔하다.
- * 문자열 밖의 끝 쉼표만 지우고, 문자열 안 제어 문자는 이스케이프해 JSON.parse에 넘긴다.
+ * 문자열 밖의 끝 쉼표만 지우고, 문자열 안 제어 문자(줄바꿈·탭·세로 탭 등 모두)는 이스케이프해 JSON.parse에 넘긴다.
  */
 export function parseLenientJson(text: string): unknown {
   const s = text.replace(/^\uFEFF/, '');
@@ -54,6 +54,8 @@ export function parseLenientJson(text: string): unknown {
       } else if (c === '\n') out.push('\\n');
       else if (c === '\r') out.push('\\r');
       else if (c === '\t') out.push('\\t');
+      // 그 밖의 제어 문자(세로 탭 등 — CAT ROTATION 장식 글자에 \v)도 JSON.parse가 거부한다
+      else if (c < ' ') out.push('\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
       else out.push(c);
       continue;
     }
