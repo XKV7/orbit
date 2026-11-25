@@ -410,8 +410,10 @@ export class Stage {
   private mirrorSprite: Sprite | null = null;
 
   /**
-   * 잔상 (원작 HallOfMirrors): 트랙 층(타일·행성·장식)을 지우지 않고 계속 겹쳐 그린다.
+   * 잔상 (원작 HallOfMirrors): 화면을 지우지 않고 매 프레임 배경 층(트랙 뒤 장식) → 트랙 층을 원래 순서대로 겹쳐 그린다.
    * WebGL 화면은 매 프레임 지워지므로, 따로 쌓아 두는 텍스처에 그리고 그것을 보여 준다.
+   * 예전엔 트랙 층만 쌓아 배경 층 위에 얹었다 → 트랙 뒤 불투명 장식이 지나간 타일을 덮지 못해 타일이 도장 찍듯 화면에 쌓였다
+   * (Hello (BPM) 2021). 원작은 장식도 매 프레임 다시 그려 뒤 장식이 불투명하면 그 자리의 잔상을 덮는다.
    */
   setMirrors(on: boolean): void {
     if (on === !!this.mirrorRT) {
@@ -422,16 +424,21 @@ export class Stage {
     if (on) {
       const rt = RenderTexture.create({ width: this.width, height: this.height, resolution: this.app.renderer.resolution });
       const sp = new Sprite(rt);
-      const idx = stage.getChildIndex(this.worldWrap);
+      const idx = stage.getChildIndex(this.backPlane);
+      stage.removeChild(this.backPlane);
       stage.removeChild(this.worldWrap);
       stage.addChildAt(sp, idx);
+      // 떠다니는 점(ORBIT 배경 장식)은 잔상으로 쌓이면 줄이 생겨 끈다
+      this.moteGfx.visible = false;
       this.mirrorRT = rt;
       this.mirrorSprite = sp;
     } else {
       const sp = this.mirrorSprite!;
       const idx = stage.getChildIndex(sp);
       stage.removeChild(sp);
-      stage.addChildAt(this.worldWrap, idx);
+      stage.addChildAt(this.backPlane, idx);
+      stage.addChildAt(this.worldWrap, idx + 1);
+      this.moteGfx.visible = true;
       sp.destroy();
       this.mirrorRT!.destroy(true);
       this.mirrorRT = null;
@@ -617,8 +624,11 @@ export class Stage {
     if (flashAlpha > 0.001) this.flash.rect(0, 0, w, h).fill({ color: flashColor, alpha: flashAlpha });
     this.bgFlash.clear();
     if (bgFlashAlpha > 0.001) this.bgFlash.rect(0, 0, w, h).fill({ color: bgFlashColor, alpha: bgFlashAlpha });
-    // 잔상: 트랙 층을 지우지 않고 겹쳐 그림
-    if (this.mirrorRT) this.app.renderer.render({ container: this.worldWrap, target: this.mirrorRT, clear: false });
+    // 잔상: 지우지 않고 배경 층 → 트랙 층 순서로 겹쳐 그림
+    if (this.mirrorRT) {
+      this.app.renderer.render({ container: this.backPlane, target: this.mirrorRT, clear: false });
+      this.app.renderer.render({ container: this.worldWrap, target: this.mirrorRT, clear: false });
+    }
   }
 
   /** 월드에서 보이는 영역 (컬링용, 회전 고려해 원으로 근사). */
