@@ -8,7 +8,7 @@
 ## 0. 처음 이어받을 때 (체크리스트)
 
 1. 사용자는 한국어로 말한다 → **답변은 한국어**. 커밋 메시지·PR 본문은 영어.
-2. 준비: `npm ci` → `npx vitest run` (233개 통과해야 정상) → `npm run build`.
+2. 준비: `npm ci` → `npx vitest run` (234개 통과해야 정상) → `npm run build`.
 3. `main`이 기준이다. 열린 PR이 있는지, 마지막 Firebase 배포가 성공했는지 본다 (2절).
 4. 8절의 **사용자 응답 대기** 항목 — 사용자가 캡처·파일을 보내면 그것부터 이어서 본다.
 5. 다른 계정이면:
@@ -52,7 +52,7 @@
 ```bash
 npm ci                 # 의존성 (새 컨테이너면 먼저)
 npm run dev            # 개발 서버
-npx vitest run         # 테스트 (현재 233개 통과)
+npx vitest run         # 테스트 (현재 234개 통과)
 npx tsc --noEmit -p .  # 타입 검사 (tests/tmp 같은 임시 테스트 파일이 있으면 node:fs 타입 때문에 실패 — 지울 것)
 npm run build          # tsc + vite build → dist/
 npx vite preview --port 4175 --strictPort   # 빌드 결과로 브라우저 시험 (백그라운드로)
@@ -166,7 +166,8 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 
 ## 7. 제작 과정 (PR 요약, 최근 → 과거)
 
-**원작 레벨 재현 · 원작 규칙 (#71~#106)**
+**원작 레벨 재현 · 원작 규칙 (#71~#107)**
+- #107 CAT ROTATION(AWC2026, katagiri) 안 열림: 장식 글자 안에 세로 탭(\v) 제어 문자 → `parseLenientJson`이 줄바꿈·탭만 이스케이프해 JSON.parse가 거부. 문자열 안 모든 제어 문자(0x00~0x1F)를 \uXXXX로. 고친 뒤 2544타일·이벤트 6450·장식 306, 그림 86장 2.1초, 자동 플레이 정상.
 - #106 자동 맵 동타 수를 소리 세기에 따라 (사용자: 2·3·4·6·8·10·12·16): 고른 동타 자리 중 상대 세기 → `multiHitCount` (난이도별 최대 어려움 3·매우 어려움 6·극한 10·원곡 그대로 16), 미드스핀을 N−1개 이어 붙임. 이어진 미드스핀은 두 자리를 오가며 겹쳐 놓이는 게 원작 모양이라 그 묶음 안은 겹침으로 세지 않는다(`countOverlaps`의 `same`, `overlapsBesidesMultiHits`). 실제 곡: 어려움 [3,2], 매우 어려움 [6,2,2], 칩튠 원곡 그대로 [16,10], 겹침 0. 자동 플레이로 16동타 맵 클리어(완벽 163).
 - #105 '채보로 노래 만들기' 곡 구조·셈여림 (사용자: '너무 일정함', 파형이 처음부터 끝까지 같은 굵기): 4마디 구간을 맵 타일 밀도로 도입·벌스·빌드업·드랍·쉼·끝으로 나눔(`planSections`, 밀도 상위 35% = 드랍·하위 30% = 쉼, 드랍 앞 마디 = 빌드업) → 구간별 편곡 `ARR`(드럼 0/1/2·베이스·화음·리드 옥타브·대선율 아르페지오·음량·화음 진행), 빌드업 스네어 연타+상승음, 드랍 첫 박 크래시+서브 드롭, 4마디 끝 드럼 필, 마지막 드랍 묶음 반음 올림. 멜로디는 타일 모양(꺾임 클수록 큰 도약, 회전 방향 바뀌면 오르내림 반대) + 2마디 리듬이 같으면 같은 선율(주제, 세 번째마다 끝 두 음 변주). 악기 묶음별로 그려 킥에 펌핑, 구간 음량 곱함, 정규화는 상위 0.3% 봉우리 기준(예전 tanh×1.3이 셈여림을 지웠다). 세기·하이햇 스윙 약간.
 - #104 레벨 선택 '에디터로 열기': 고른 레벨(데모·불러온 것·온라인·영구 목록 — 영구 목록은 먼저 받음)을 복사본(새 id)으로 에디터에 (`openInEditor`, 저장소 되살리기는 건너뜀, 고치던 레벨이 있으면 `editorHasWork`로 묻는다). 원본은 그대로.
@@ -206,7 +207,7 @@ node scripts/memory.mjs <레벨> [포트]                          # 폰 흉내�
 
 **그 이전**: 기본 게임(궤도 회전·판정·타일), 레벨 에디터(방향 패드·타임라인·파형), 곡에서 자동 생성, 동영상→mp3 변환, 온라인(Firebase 로그인·업로드·순위·동기화).
 
-**시험한 원작 레벨**: Hello (BPM) 2025/2026, Phantigma(AWC2026 결승 타이브레이커, 대회판·일반판), BIKE - Tanger, Plum - Timeline, R(원작 월드), Once Forgotten, Nothing Remains(AWC2026, 'ofnr', 13330타일, 10분 반, wav), Camellia - QuomodocunquizE(6450타일), Cardboard Box - The Limit Does Not Exist(1360타일, zip에 backup.adofai 같이 있음 — backup 아닌 쪽을 고름), 메가믹스(10분, 사용자가 잘 된다고 보고).
+**시험한 원작 레벨**: Hello (BPM) 2025/2026, Phantigma(AWC2026 결승 타이브레이커, 대회판·일반판), BIKE - Tanger, Plum - Timeline, R(원작 월드), Once Forgotten, Nothing Remains(AWC2026, 'ofnr', 13330타일, 10분 반, wav), Camellia - QuomodocunquizE(6450타일), Cardboard Box - The Limit Does Not Exist(1360타일, zip에 backup.adofai 같이 있음 — backup 아닌 쪽을 고름), katagiri - CAT ROTATION(AWC2026, 2544타일, 262 BPM, main·backup 같은 내용), 메가믹스(10분, 사용자가 잘 된다고 보고).
 
 ## 8. 현재 상황 / 남은 일 (2026-11 기준)
 
