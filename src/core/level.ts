@@ -94,7 +94,7 @@ export function defaultSettings(): LevelSettings {
     pitch: 1,
     volume: 0.8,
     countdownTicks: 4,
-    trackColor: '#3a3f55',
+    trackColor: '#debb7b',
     bgColor: '#0e0f16',
     startDirection: 'CW',
   };

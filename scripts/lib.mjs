@@ -41,9 +41,11 @@ export async function openAndPlay(page, { url, file, startAt = 0, freezeAt, sett
   await page.waitForTimeout(500);
   // 레벨 불러오기 입력 (첫 번째 파일 입력은 '음원으로 레벨 만들기')
   await page.locator('input[type=file][accept*=adofai]').first().setInputFiles(file);
-  // 원작 맵 경고 창
-  await page.waitForSelector('.modal-wrap', { timeout: 120000 });
-  await page.locator('.modal-wrap button').last().click().catch(() => {});
+  // 원작 맵 경고 창 (ORBIT 자체 레벨 .json은 없음)
+  if (/\.(zip|adofai)$/i.test(String(file))) {
+    await page.waitForSelector('.modal-wrap', { timeout: 120000 });
+    await page.locator('.modal-wrap button').last().click().catch(() => {});
+  } else await page.waitForTimeout(1500);
   await page.waitForTimeout(300);
   await page.locator('label:has-text("자동 플레이") input').check();
   await page.evaluate(

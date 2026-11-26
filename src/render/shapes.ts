@@ -211,11 +211,13 @@ export function planetContext(color: number, bold = false): GraphicsContext {
   let c = planetCache.get(key);
   if (c) return c;
   c = new GraphicsContext();
-  for (let k = 6; k >= 1; k--) c.circle(0, 0, PLANET_R + k * 4).fill({ color, alpha: (bold ? 0.06 : 0.035) * (7 - k) });
+  // 원작 행성: 반사광 없는 단색 원 + 넓고 부드러운 빛무리
+  for (let k = 10; k >= 1; k--) c.circle(0, 0, PLANET_R + k * 3.2).fill({ color, alpha: (bold ? 0.05 : 0.032) * (11 - k) * 0.6 });
   // 강조: 검은 테두리로 밝은 배경에서도 행성이 묻히지 않게
   if (bold) c.circle(0, 0, PLANET_R + 3).fill({ color: 0x000000, alpha: 0.6 });
   c.circle(0, 0, PLANET_R).fill({ color });
-  c.circle(-PLANET_R * 0.3, -PLANET_R * 0.3, PLANET_R * 0.45).fill({ color: 0xffffff, alpha: 0.35 });
+  // 가운데가 살짝 밝게 (빛나는 공처럼)
+  c.circle(0, 0, PLANET_R * 0.55).fill({ color: 0xffffff, alpha: 0.18 });
   planetCache.set(key, c);
   return c;
 }

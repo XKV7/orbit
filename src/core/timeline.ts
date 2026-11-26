@@ -196,7 +196,9 @@ export class VisualTimeline {
 
   constructor(private readonly chart: Chart) {
     const n = chart.tiles.length;
-    this.baseTrack = parseColor(chart.level.settings.trackColor, 0x3a3f55);
+    // 기본 트랙은 원작처럼 살구색 (예전 ORBIT 기본 남색 #3a3f55로 만든 레벨도 살구색으로 보인다)
+    const tc = chart.level.settings.trackColor;
+    this.baseTrack = !tc || tc.toLowerCase() === '#3a3f55' ? 0xdebb7b : parseColor(tc, 0xdebb7b);
     this.baseBg = parseColor(chart.level.settings.bgColor, 0x0e0f16);
     this.bgColor = this.baseBg;
     this.tileColor = new Uint32Array(n);
@@ -292,7 +294,8 @@ export class VisualTimeline {
     this.shakeX = 0;
     this.shakeY = 0;
     for (let i = 0; i < this.chart.tiles.length; i++) this.tileScale[i] = this.chart.tiles[i].baseScale;
-    this.tileStyle.fill(0);
+    // 기본 타일 모양 = 원작 Standard (채움 + 어두운 테두리)
+    this.tileStyle.fill(1);
     this.tileColor2.fill(-1);
     this.tileGlowDur.fill(0);
     this.tileLit.fill(1);
