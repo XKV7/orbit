@@ -192,7 +192,7 @@ export class TrackView {
   private make(i: number): TileObj {
     const t = this.chart.tiles[i];
     const root = new Container();
-    const style = this.timeline ? this.timeline.tileStyle[i] : 0;
+    const style = this.timeline ? this.timeline.tileStyle[i] : 1;
     let band: Graphics;
     let inner: Graphics | undefined;
     if (this.outline) {
@@ -295,7 +295,7 @@ export class TrackView {
       o.root.position.set(x + (anim ? anim.dx : 0), y - (anim ? anim.dy : 0));
       o.root.rotation = -degToRad((tl ? tl.tileRot[i] : 0) + this.chart.tiles[i].baseRot) - (anim ? degToRad(anim.rot) : 0);
       o.root.alpha = Math.min(1, alpha);
-      let base = tl ? tl.tileColor[i] : 0x3a3f55;
+      let base = tl ? tl.tileColor[i] : 0xdebb7b;
       // 물결 (원작 Glow): 두 색 사이를 오간다, 트랙을 따라 퍼지는 모양
       if (tl && tl.tileColor2[i] >= 0) {
         const tt = u.time ?? u.now / 1000;

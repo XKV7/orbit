@@ -1,8 +1,9 @@
 import { Container, Graphics } from 'pixi.js';
 import { planetContext, PLANET_R, sv } from './shapes';
 
-export const COLOR_A = 0xff8a3d;
-export const COLOR_B = 0x3de0d0;
+/** 원작처럼 불 행성(빨강)·얼음 행성(파랑) */
+export const COLOR_A = 0xf03c2c;
+export const COLOR_B = 0x2e8cff;
 /** 셋째 행성 (원작 MultiPlanet 3개) */
 export const COLOR_C = 0x8be36b;
 

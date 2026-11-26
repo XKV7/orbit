@@ -237,7 +237,7 @@ function objectFrom(e: Record<string, unknown>, floor: number): Decoration | nul
   delete d.image;
   d.shape = planet ? 'planet' : 'tile';
   const colKey = planet ? e.planetColor : e.trackColor;
-  const c = adofaiColor(colKey) ?? (planet ? '#ff8a3d' : '#debb7b');
+  const c = adofaiColor(colKey) ?? (planet ? '#f03c2c' : '#debb7b');
   d.color = c;
   // 타일 오브젝트도 8자리 색의 알파를 쓴다 (알파 0으로 숨겨 둔 오브젝트가 트랙 색 사각형으로 보였다)
   const a = adofaiAlpha(colKey) * (planet ? 1 : num(e.trackOpacity, 100) / 100);

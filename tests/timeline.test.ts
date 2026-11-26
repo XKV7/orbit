@@ -35,7 +35,7 @@ describe('연출 타임라인', () => {
     const tl = new VisualTimeline(chart());
     tl.update(3.5);
     expect(tl.tileColor[3]).toBe(0xff0000);
-    expect(tl.tileColor[2]).toBe(0x3a3f55);
+    expect(tl.tileColor[2]).toBe(0xdebb7b);
     expect(tl.tileOffX[5]).toBeCloseTo(5);
     expect(tl.tileAlpha[6]).toBeCloseTo(0.5);
     tl.update(4.1);
@@ -47,7 +47,7 @@ describe('연출 타임라인', () => {
     expect(tl.camera.zoom).toBeCloseTo(2);
     tl.update(0.1);
     expect(tl.camera.zoom).toBe(1);
-    expect(tl.tileColor[3]).toBe(0x3a3f55);
+    expect(tl.tileColor[3]).toBe(0xdebb7b);
   });
 });
 
