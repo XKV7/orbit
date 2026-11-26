@@ -34,3 +34,16 @@ export function analyzeOffsets(errors: number[], minCount = 16): OffsetHint | nu
 export function worthSuggesting(h: OffsetHint | null, current = 0): h is OffsetHint {
   return !!h && Math.abs(h.median - current) >= 8 && h.spread <= 40;
 }
+
+/** 튀는 값(중앙값에서 편차의 2.5배 넘게)을 빼고 평균 — 보정 탭 몇 개가 튀어도 값이 덜 흔들린다. */
+export function steadyMean(xs: number[]): number {
+  const med = (v: number[]) => {
+    const s = [...v].sort((a, b) => a - b);
+    const m = s.length >> 1;
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+  const m = med(xs);
+  const mad = med(xs.map((e) => Math.abs(e - m))) || 1;
+  const kept = xs.filter((e) => Math.abs(e - m) <= 2.5 * mad);
+  return kept.reduce((a, b) => a + b, 0) / kept.length;
+}
