@@ -4,7 +4,7 @@ import { SmoothClock } from '../core/clock';
 /**
  * AudioContext 하나로 음악·효과음 모두 처리. 마스터 클럭 제공.
  *
- * songTime = (ctxTime − startCtxTime) × pitch − outputLatency × pitch
+ * songTime = (ctxTime − startCtxTime) × pitch  (출력 지연은 기기 오프셋이 맡는다 — device.ts)
  * 입력 판정 시각 = songTime(event.timeStamp) − inputOffset × pitch
  * 렌더 시각 = songTime + visualOffset × pitch
  */
@@ -138,7 +138,9 @@ export class AudioEngine {
   songTime(perfMs = performance.now()): number {
     if (!this.playing) return this.frozenSong ?? 0;
     const ct = this.smoothCtxTime(perfMs);
-    return (ct - this.startCtxTime) * this.pitch - this.outputLatency * this.pitch;
+    // 브라우저가 알려 주는 출력 지연(outputLatency)은 재생 중에도 수 ms~수십 ms씩 바뀌어, 여기서 빼면 시계가 흔들렸다
+    // (보정 값이 매번 다르고 플레이 중 판정이 밀림). 지연은 보정한 기기 오프셋에 통째로 넣는다.
+    return (ct - this.startCtxTime) * this.pitch;
   }
 
   /** 과거 perf 시각(이벤트 timeStamp)의 곡 시각. */
